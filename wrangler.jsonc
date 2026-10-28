@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "dropshelf-local",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "observability": { "enabled": true, "head_sampling_rate": 0.1 },
+  "vars": {
+    "APP_NAME": "Drop Shelf",
+    "APP_ORIGIN": "http://localhost:8787",
+    "CONTENT_ORIGIN": "http://127.0.0.1:8787",
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": "",
+    "SERVICE_TOKEN_LABELS": "{}",
+    "LOCAL_DEV_EMAIL": "developer@example.test",
+    "MAX_FILE_BYTES": "26214400",
+    "ALLOWED_FILE_TYPES": "image/*,.html,.htm,.md,.markdown,.csv"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "dropshelf-local",
+    "database_id": "00000000-0000-0000-0000-000000000000",
+    "migrations_dir": "./migrations"
+  }],
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "dropshelf-local-files" }]
+}

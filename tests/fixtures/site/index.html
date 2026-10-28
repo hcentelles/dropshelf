@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sample review</title>
+<style>
+body { font: 18px/1.6 system-ui, sans-serif; max-width: 700px; margin: 80px auto; padding: 0 24px; color: #172033; }
+img { width: 96px; height: 96px; }
+button { padding: 10px 16px; border-radius: 6px; background: #172033; color: white; border: 0; font: inherit; }
+</style>
+<img src="images/sample.svg" alt="A blue square">
+<h1>Ready for review</h1>
+<p>This page and its relative image were uploaded together.</p>
+<button id="check">Check page script</button>
+<p id="result" role="status"></p>
+<script>document.getElementById('check').addEventListener('click', () => { document.getElementById('result').textContent = 'The page script works.'; });</script>
+</html>

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <meta name="description" content="A private file shelf for teams." />
+    <title>Drop Shelf</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" id="brand">Drop Shelf</a>
+      <span class="brand-divider" aria-hidden="true"></span><span class="brand-section">Share</span>
+      <div class="account">
+        <span class="access-label"><i class="ph ph-lock-simple" aria-hidden="true"></i> Team access</span>
+        <details class="account-menu">
+          <summary><span class="avatar" id="user-avatar">DS</span><span id="user-email">Loading…</span><i class="ph ph-caret-down" aria-hidden="true"></i></summary>
+          <div class="menu-panel"><button id="copy-mcp"><i class="ph ph-plugs-connected" aria-hidden="true"></i> Copy MCP URL</button><a href="/cdn-cgi/access/logout">Sign out</a></div>
+        </details>
+      </div>
+    </header>
+    <main>
+      <div class="page-heading"><h1>Shared files</h1><p>Pages, images, and documents for the team.</p></div>
+      <section class="drop-zone" id="drop-zone" aria-label="File upload" aria-busy="false">
+        <i class="ph ph-cloud-arrow-up upload-icon" aria-hidden="true"></i>
+        <h2>Drop files or folders here</h2>
+        <p id="supported-types">Loading supported file types…</p>
+        <div class="upload-actions"><button class="button primary" id="select-files">Select files</button><button class="button quiet" id="select-folder">Select folder</button></div>
+        <span class="upload-limit" id="upload-limit">Loading upload settings…</span>
+        <input type="file" id="file-input" multiple hidden />
+        <input type="file" id="folder-input" webkitdirectory multiple hidden />
+      </section>
+      <div class="upload-progress" id="upload-progress" hidden><span id="progress-text"></span><progress id="progress" value="0" max="100" aria-label="Upload progress"></progress></div>
+      <section class="notice" id="notice" hidden role="status" aria-live="polite"><i class="ph ph-check-circle" id="notice-icon" aria-hidden="true"></i><span id="notice-text"></span><button class="button" id="copy-new" hidden></button><button class="icon-button" id="dismiss-notice" aria-label="Dismiss message"><i class="ph ph-x" aria-hidden="true"></i></button></section>
+      <section class="files-section" aria-labelledby="files-heading">
+        <div class="list-heading"><div><h2 id="files-heading">All files</h2><p id="file-count">Loading files…</p></div><span class="sort-label">Newest first<i class="ph ph-arrow-down" aria-hidden="true"></i></span></div>
+        <div class="table-wrap">
+          <table><thead><tr><th scope="col">Name</th><th scope="col">Uploaded by</th><th scope="col">Link</th><th scope="col">Date</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody id="file-list"></tbody></table>
+          <div class="empty-state" id="empty-state" hidden><i class="ph ph-files" aria-hidden="true"></i><h3>Your shelf is ready</h3><p>Drop your first file above.<br />Your team’s files will appear here.</p></div>
+        </div>
+        <div class="list-footer" id="list-footer" aria-live="polite"><span id="list-status">Loading files…</span><button class="button" id="load-more" hidden>Load more files</button><button class="button" id="retry-list" hidden>Try again</button></div>
+        <div id="scroll-sentinel" aria-hidden="true"></div>
+      </section>
+      <noscript><p class="notice">Enable JavaScript to upload and list files.</p></noscript>
+    </main>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>

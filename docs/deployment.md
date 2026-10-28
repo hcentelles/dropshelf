@@ -1,0 +1,136 @@
+# Deployment
+
+This guide creates one private instance. Repeat it with different names, resources, and account settings for each team. No company settings or credentials belong in the source repository.
+
+## 1. Install and authenticate
+
+Install Node.js 24 or later, clone the repository, and run:
+
+```sh
+npm ci
+npm run build
+```
+
+For a computer with more than one Cloudflare account, create a named Wrangler profile:
+
+```sh
+npx wrangler auth create shelf-demo
+npx wrangler auth activate shelf-demo
+```
+
+In Chrome, select only the account for this instance. Do not select access to all accounts. The profile keeps this login separate from the default Wrangler login.
+
+Auth profiles are currently an experimental Wrangler feature. Use `--profile shelf-demo` on the commands below, and set `account_id` through the setup script. These two settings prevent an accidental deployment to another account.
+
+For automated deployments, use a Cloudflare API token restricted to the target account. Store it as `CLOUDFLARE_API_TOKEN` in your deployment system. Wrangler API tokens take precedence over auth profiles. Do not put a token in an instance file.
+
+## 2. Select addresses
+
+Use two HTTPS origins:
+
+- App: `https://dropshelf-demo.YOUR_SUBDOMAIN.workers.dev`
+- Content: `https://dropshelf-demo-content.YOUR_SUBDOMAIN.workers.dev`
+
+You can find your Workers subdomain in the account dashboard. The Worker names must match these addresses. A custom-domain setup is described below.
+
+## 3. Create storage
+
+Enable R2 in the target account if needed. Use Standard storage and keep public access disabled. Then create the resources:
+
+```sh
+CLOUDFLARE_ACCOUNT_ID=YOUR_ACCOUNT_ID npx wrangler r2 bucket create dropshelf-demo-files --profile shelf-demo
+CLOUDFLARE_ACCOUNT_ID=YOUR_ACCOUNT_ID npx wrangler d1 create dropshelf-demo --profile shelf-demo
+```
+
+Record the D1 database UUID. The bucket has no public domain and needs no S3 credentials. Workers use native bindings.
+
+## 4. Configure Cloudflare Access
+
+In the target account, open Zero Trust. Enable an appropriate plan if needed. A small instance can use the Free plan within its limits.
+
+1. Open **Integrations → Identity providers**.
+2. Add **One-time PIN**.
+3. Open **Access controls → Applications** and add a **Self-hosted** application.
+4. Add both app and content hostnames as public hostnames in this one application.
+5. Add an **Allow** policy with the exact email addresses that can use the instance. Use an email-domain rule only when the whole domain should have access.
+6. Enable only the One-time PIN identity provider for this application.
+7. Keep the authorization cookie **HttpOnly**. Set a session duration suitable for your team.
+8. In **Advanced settings**, enable **Managed OAuth**. Enable dynamic client registration for the MCP clients you will use. Loopback callbacks are needed by many desktop clients.
+9. Copy the application's **AUD tag** and your Zero Trust team domain, such as `your-team.cloudflareaccess.com`.
+
+The OAuth setting belongs to our Access application. The Worker validates Access JWTs; it does not run a separate OAuth server. This is the [Cloudflare Managed OAuth flow](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/managed-oauth/).
+
+Use one Access application for both hostnames so one OAuth token can reach the app API and content URLs. Keep the default cookie setup that signs browser users into all application hostnames. If you use separate Access applications, you must configure their audiences and delegated access separately; this setup script expects one audience.
+
+Do not add a Bypass or Everyone policy. Do not expose the R2 bucket. The Worker also fails closed if Access is missing or misconfigured.
+
+## 5. Create private instance settings
+
+Copy `instance.example.json` to a private directory outside the checkout. For example:
+
+```sh
+mkdir -p "$HOME/.config/dropshelf/demo"
+cp instance.example.json "$HOME/.config/dropshelf/demo/instance.json"
+```
+
+Edit that copied file. Set the account ID, D1 UUID, bucket, exact app and content origins, Access team domain, and AUD tag. Change `appName` to set the name shown in the UI. Set `allowedFileTypes` to the allowed extensions and MIME types, such as `image/*,.html,.htm,.md,.markdown,.csv`. This becomes the `ALLOWED_FILE_TYPES` Worker variable. The two Worker names are `name` and `name-content`.
+
+Generate deployment files:
+
+```sh
+npm run setup -- --input "$HOME/.config/dropshelf/demo/instance.json" --out "$HOME/.config/dropshelf/demo"
+```
+
+This creates `app.jsonc` and `content.jsonc`. Both point to the local source, built assets, and migrations. They contain deployment settings, and they stay outside Git. They clear the local test identity and disable Worker preview URLs.
+
+## 6. Apply the schema and deploy
+
+```sh
+npx wrangler d1 migrations apply DB --remote --config "$HOME/.config/dropshelf/demo/app.jsonc" --profile shelf-demo
+npm run check
+npx wrangler deploy --config "$HOME/.config/dropshelf/demo/app.jsonc" --profile shelf-demo
+npx wrangler deploy --config "$HOME/.config/dropshelf/demo/content.jsonc" --profile shelf-demo
+```
+
+The Workers share storage and the file service. The app origin serves the UI, API, and MCP. The content origin serves only uploaded files. Access protects both.
+
+If Access does not show a login page on a `workers.dev` address, review that Worker's **Settings → Domains & Routes → Cloudflare Access** and the Access application hostname list. Do not relax the Worker token check to work around a routing error.
+
+## 7. Verify
+
+Check the complete flow before you invite the team:
+
+1. In a browser without a session, open the app and a copied file URL. Both must require Access login.
+2. Sign in with an approved email code. The app header must show that email.
+3. Drop HTML, an image, and an unsupported file. Check the accepted and skipped counts.
+4. Open the HTML and image links. Check the uploader and date in the list.
+5. Upload a folder with `index.html` and a relative image. Open the HTML and verify the image.
+6. Copy one link and the links from a completed upload.
+7. Load older files. Verify that pages do not repeat entries.
+8. Connect your MCP client using OAuth. Call `whoami`, upload a file, and verify the same email in the browser list.
+9. Confirm that an unapproved email cannot pass the Access policy.
+10. Confirm that the content hostname returns no UI, file list, or MCP tools.
+
+A plain HTTP check is useful for the OAuth challenge:
+
+```sh
+curl -i -H 'Accept: application/json' https://YOUR_APP_HOST/mcp
+```
+
+With Managed OAuth active, Access should return a `401` with an OAuth `WWW-Authenticate` discovery header. This check does not replace a real client login.
+
+## Custom domains
+
+Add separate custom domains to the two Workers in the dashboard. Update the two origins in the private instance file, add both hostnames to the Access application, generate the configuration again, and redeploy both Workers.
+
+The generated configuration keeps `workers.dev` enabled. The Worker rejects any hostname that differs from the two configured origins, so an older default URL cannot expose the app or files. You can also disable `workers.dev` in the instance's generated configuration after custom domains are ready.
+
+## Updates and operations
+
+Keep the same R2 bucket and D1 database when you deploy a new code version. Apply new migrations before a version that needs them. Generate configuration again if you move the checkout, because its source paths are absolute.
+
+Use D1 Time Travel and exports for database recovery. Use R2 retention or a separate object backup if your team needs recoverable file copies. A D1 backup alone does not contain file bytes.
+
+A request that ends before upload completion can leave an invisible `uploading` record or an orphan R2 object. Ready file records are the file list's source of truth. Investigate old incomplete records before you remove them; do not delete objects linked to ready records. This version has no delete UI or automated retention job.
+
+To end an instance, first remove team access. Export data you need, then remove only that instance's Workers and resources. Shared resources from other instances must stay separate.
