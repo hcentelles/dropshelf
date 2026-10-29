@@ -27,7 +27,7 @@ export function fileType(path: string, declaredType = ''): string {
   return /^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/.test(mime) ? mime : 'application/octet-stream';
 }
 
-export const DEFAULT_ALLOWED_FILE_TYPES = 'image/*,.html,.htm,.md,.markdown,.csv';
+export const DEFAULT_ALLOWED_FILE_TYPES = 'image/*,.html,.htm,.md,.markdown,.csv,.pdf';
 
 export function parseAllowedFileTypes(value: string): string[] {
   if (typeof value !== 'string' || value.length > 2048) throw new Error('The file type setting is not valid.');
@@ -50,6 +50,7 @@ export function describeAllowedTypes(allowed: string[]): string {
     'image/*': 'Images', '.html': 'HTML', '.htm': 'HTML', 'text/html': 'HTML',
     '.md': 'Markdown', '.markdown': 'Markdown', 'text/markdown': 'Markdown',
     '.csv': 'CSV', 'text/csv': 'CSV',
+    '.pdf': 'PDF', 'application/pdf': 'PDF',
   };
   const labels = [...new Set(allowed.map(pattern => names[pattern] ?? pattern))];
   return new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(labels);
@@ -58,6 +59,15 @@ export function describeAllowedTypes(allowed: string[]): string {
 export function canPreview(type: string): boolean {
   return ['image/png', 'image/apng', 'image/jpeg', 'image/gif', 'image/webp',
     'image/avif', 'image/svg+xml', 'image/bmp', 'image/vnd.microsoft.icon'].includes(type);
+}
+
+export function fileTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    'image/*': 'Images', 'text/html': 'HTML', 'text/markdown': 'Markdown', 'text/csv': 'CSV',
+    'application/pdf': 'PDF', 'text/plain': 'Text', 'application/json': 'JSON',
+    'text/css': 'CSS', 'text/javascript': 'JavaScript',
+  };
+  return labels[type] ?? type;
 }
 
 export function formatSize(bytes: number): string {

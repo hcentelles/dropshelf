@@ -1,5 +1,11 @@
 # Security model
 
+## Trash access
+
+Any identity approved by Access can move, restore, or permanently delete team files. The Worker records who moved a file to Trash from the verified identity. Files in Trash do not serve content, downloads, or thumbnails. No R2 object is removed by the move or restore action.
+
+Permanent deletion requires a file already in Trash and an explicit `confirm: true` request. A deletion state blocks concurrent restore before bytes are removed. R2 deletion happens before transactional D1 cleanup. If either service fails, the operation can be retried without restoring a file whose bytes may be gone. Only a file ID and object-path hash remain after completion, so a delayed retry cannot remove a replacement file.
+
 ## Identity and access
 
 Cloudflare Access protects both instance hostnames. The Worker independently validates the Access JWT with the configured team's public keys. It checks the issuer, audience, signature algorithm, required timestamps, and expiry. A plain email header is not trusted.
@@ -7,6 +13,10 @@ Cloudflare Access protects both instance hostnames. The Worker independently val
 Upload groups belong to the verified user or service. One user cannot add a file to another user's upload group. Every file stores the identity used at upload time. An email is a historical record; changing an Access policy does not rewrite old uploader records.
 
 All approved identities can list and read all ready files within an instance. Use separate instances for teams that must not share data. Each instance needs separate R2, D1, and Access resources.
+
+The deployment guide uses a 14-day browser session, a 15-minute MCP access token, and a 14-day OAuth refresh grant. Cloudflare Access manages all three. Daily use does not remove the grant's time limit. A client can refresh only while its grant remains valid and its identity passes Access policy checks. See [session and renewal setup](mcp.md#session-duration-and-renewal).
+
+Use Access to change or revoke access. Do not rely on a policy edit to invalidate every token already issued at once. Existing tokens can remain valid until expiry or revocation. Keep the browser cookie HttpOnly and restrict OAuth return addresses to the clients used by the instance.
 
 ## Uploaded HTML and SVG
 

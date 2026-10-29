@@ -86,7 +86,9 @@ try {
   client = new Client({ name: 'dropshelf-deployment-check', version: '0.1.0' });
   await client.connect(transport);
   const tools = await client.listTools();
-  assert.ok(tools.tools.some(tool => tool.name === 'upload_file'));
+  for (const name of ['upload_file', 'trash_file', 'restore_file', 'delete_file_permanently', 'get_file_filters', 'trash_files', 'restore_files', 'delete_files_permanently']) {
+    assert.ok(tools.tools.some(tool => tool.name === name), `The server must expose ${name}.`);
+  }
   async function call(name, args = {}) {
     const result = await client.callTool({ name, arguments: args });
     assert.ok(!result.isError, `${name} must succeed.`);
@@ -99,7 +101,14 @@ try {
   assert.ok(identity.email, 'A human login must have a verified email.');
   const page = await call('list_files', { limit: 2 });
   assert.ok(Array.isArray(page.files));
-  console.log('PASS: MCP SDK connection, tool discovery, verified identity, and file listing.');
+  const trash = await call('list_files', { view: 'trash', limit: 2 });
+  assert.ok(Array.isArray(trash.files));
+  assert.ok(trash.files.every(file => file.trashedAt !== null));
+  const filters = await call('get_file_filters');
+  assert.ok(Array.isArray(filters.authors) && Array.isArray(filters.types));
+  const search = await call('list_files', { q: 'no-such-deployment-check-file', type: 'application/pdf' });
+  assert.equal(search.total, 0);
+  console.log('PASS: MCP SDK connection, tool discovery, verified identity, file listing, search, and filters.');
   if (write) {
     const { uploadId } = await call('create_upload');
     const html = await readFile(new URL('../tests/fixtures/site/index.html', import.meta.url), 'utf8');

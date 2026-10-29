@@ -1,23 +1,8 @@
 import { acceptFile } from '../shared/formats';
-import type { FilePage, Principal, SharedFile } from '../shared/types';
+import type { Principal, SharedFile } from '../shared/types';
+import { present, type FileRow } from './file-record';
+export { listFiles } from './file-query';
 import { allowedFileTypes, cleanPath, HttpError, maxFileBytes } from './http';
-
-interface FileRow {
-  id: string; upload_id: string; path: string; name: string; object_key: string;
-  content_type: string; size: number; uploader_email: string | null;
-  uploader_label: string; source: 'web' | 'mcp'; created_at: number;
-}
-
-function present(row: FileRow, env: Env): SharedFile {
-  const path = row.path.split('/').map(encodeURIComponent).join('/');
-  const url = `${new URL(env.CONTENT_ORIGIN).origin}/f/${row.upload_id}/${path}`;
-  return {
-    id: row.id, uploadId: row.upload_id, path: row.path, name: row.name,
-    contentType: row.content_type, size: row.size, uploaderEmail: row.uploader_email,
-    uploaderLabel: row.uploader_label, source: row.source, createdAt: row.created_at,
-    url, downloadUrl: `${url}?download=1`,
-  };
-}
 
 export async function createUpload(env: Env, user: Principal): Promise<string> {
   const id = crypto.randomUUID();
@@ -26,37 +11,8 @@ export async function createUpload(env: Env, user: Principal): Promise<string> {
   return id;
 }
 
-export async function listFiles(env: Env, cursor: string | null, limit = 30): Promise<FilePage> {
-  if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new HttpError(400, 'Use a limit from 1 to 100.');
-  let time: number | undefined;
-  let id: string | undefined;
-  if (cursor) {
-    try {
-      const value: unknown = JSON.parse(atob(cursor));
-      if (!Array.isArray(value) || value.length !== 2 || !Number.isSafeInteger(value[0]) ||
-        typeof value[1] !== 'string' || !/^[0-9a-f-]{36}$/.test(value[1])) throw new Error();
-      [time, id] = value as [number, string];
-    } catch { throw new HttpError(400, 'The page cursor is not valid.'); }
-  }
-  const page = time !== undefined
-    ? env.DB.prepare("SELECT * FROM files WHERE status = 'ready' AND (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT ?")
-      .bind(time, id, limit + 1)
-    : env.DB.prepare("SELECT * FROM files WHERE status = 'ready' ORDER BY created_at DESC, id DESC LIMIT ?")
-      .bind(limit + 1);
-  const [rows, count] = await Promise.all([
-    page.all<FileRow>(),
-    env.DB.prepare("SELECT COUNT(*) AS total FROM files WHERE status = 'ready'").first<{ total: number }>(),
-  ]);
-  const selected = rows.results.slice(0, limit);
-  const last = selected.at(-1);
-  return {
-    files: selected.map(row => present(row, env)), total: count?.total ?? 0,
-    nextCursor: rows.results.length > limit && last ? btoa(JSON.stringify([last.created_at, last.id])) : null,
-  };
-}
-
 export async function getFile(env: Env, id: string): Promise<SharedFile> {
-  const row = await env.DB.prepare("SELECT * FROM files WHERE id = ? AND status = 'ready'")
+  const row = await env.DB.prepare("SELECT * FROM files WHERE id = ? AND status IN ('ready', 'trashed', 'deleting')")
     .bind(id).first<FileRow>();
   if (!row) throw new HttpError(404, 'The file was not found.');
   return present(row, env);
@@ -69,6 +25,11 @@ interface UploadInput {
   size: number;
   body: ReadableStream<Uint8Array> | Uint8Array;
   source: 'web' | 'mcp';
+}
+
+export async function objectKeyHash(key: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 export async function uploadFile(env: Env, user: Principal, input: UploadInput): Promise<SharedFile> {
@@ -87,16 +48,19 @@ export async function uploadFile(env: Env, user: Principal, input: UploadInput):
     name: path.split('/').at(-1)!, object_key: `${input.uploadId}/${path}`,
     content_type: contentType, size: input.size, uploader_email: user.email,
     uploader_label: user.label, source: input.source, created_at: Date.now(),
+    trashed_at: null, trashed_by_id: null, trashed_by_label: null, delete_started_at: null,
   };
   // Reserve the path before writing R2. Concurrent requests cannot replace a file.
   const reserved = await env.DB.prepare(`INSERT INTO files
     (id, upload_id, path, name, object_key, content_type, size, uploader_id,
       uploader_email, uploader_label, source, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'uploading', ?)
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'uploading', ?
+    WHERE NOT EXISTS (SELECT 1 FROM deleted_files WHERE object_key_hash = ?)
     ON CONFLICT(upload_id, path) DO NOTHING`)
     .bind(row.id, row.upload_id, row.path, row.name, row.object_key, row.content_type,
-      row.size, user.id, row.uploader_email, row.uploader_label, row.source, row.created_at).run();
-  if (!reserved.meta.changes) throw new HttpError(409, 'This file path is already in the upload.');
+      row.size, user.id, row.uploader_email, row.uploader_label, row.source, row.created_at,
+      await objectKeyHash(row.object_key)).run();
+  if (!reserved.meta.changes) throw new HttpError(409, 'This file path is already used. Start a new upload group to use it again.');
   try {
     if (input.body instanceof Uint8Array) {
       await env.FILES.put(row.object_key, input.body, { httpMetadata: { contentType } });
@@ -126,14 +90,14 @@ export async function uploadFile(env: Env, user: Principal, input: UploadInput):
 }
 
 export async function findContent(env: Env, uploadId: string, path: string): Promise<FileRow> {
-  const row = await env.DB.prepare("SELECT * FROM files WHERE upload_id = ? AND path = ? AND status = 'ready'")
+  const row = await env.DB.prepare("SELECT * FROM files WHERE upload_id = ? AND path = ? AND status = 'ready' AND trashed_at IS NULL AND delete_started_at IS NULL")
     .bind(uploadId, cleanPath(path)).first<FileRow>();
   if (!row) throw new HttpError(404, 'The file was not found.');
   return row;
 }
 
 export async function thumbnail(env: Env, id: string): Promise<Response> {
-  const row = await env.DB.prepare("SELECT * FROM files WHERE id = ? AND status = 'ready'")
+  const row = await env.DB.prepare("SELECT * FROM files WHERE id = ? AND status = 'ready' AND trashed_at IS NULL AND delete_started_at IS NULL")
     .bind(id).first<FileRow>();
   const safeTypes = ['image/png', 'image/apng', 'image/jpeg', 'image/gif', 'image/webp',
     'image/avif', 'image/bmp', 'image/vnd.microsoft.icon'];

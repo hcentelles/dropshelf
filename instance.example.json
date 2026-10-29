@@ -9,7 +9,7 @@
   "contentOrigin": "https://dropshelf-demo-content.your-subdomain.workers.dev",
   "accessTeamDomain": "your-team.cloudflareaccess.com",
   "accessAud": "replace-with-your-access-application-audience",
-  "maxFileBytes": 26214400,
-  "allowedFileTypes": "image/*,.html,.htm,.md,.markdown,.csv",
+  "maxFileBytes": 104857600,
+  "allowedFileTypes": "image/*,.html,.htm,.md,.markdown,.csv,.pdf",
   "serviceTokenLabels": {}
 }

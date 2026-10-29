@@ -16,6 +16,9 @@ export interface SharedFile {
   uploaderLabel: string;
   source: 'web' | 'mcp';
   createdAt: number;
+  trashedAt: number | null;
+  trashedBy: string | null;
+  deletionPending: boolean;
   url: string;
   downloadUrl: string;
 }
@@ -25,6 +28,20 @@ export interface FilePage {
   nextCursor: string | null;
   total: number;
 }
+
+export type FileView = 'files' | 'trash';
+
+export interface FileFilters { q?: string; type?: string; author?: string }
+export interface FileFilterOptions {
+  total: number;
+  types: Array<{ value: string; label: string; count: number }>;
+  authors: Array<{ value: string; label: string; count: number }>;
+}
+export type BulkAction = 'trash' | 'restore' | 'delete';
+export interface BulkResult {
+  results: Array<{ id: string; ok: boolean; error?: string; status?: number }>;
+}
+export const MAX_BULK_FILES = 10;
 
 export interface AppConfig {
   name: string;

@@ -1,9 +1,13 @@
-import type { AppConfig } from '../shared/types';
+import type { AppConfig, FileView } from '../shared/types';
 import { authenticate } from './auth';
 import { serveContent } from './content';
 import { createUpload, getFile, listFiles, thumbnail, uploadFile } from './files';
 import { allowedFileTypes, checkBrowserOrigin, HttpError, isLoopback, json, maxFileBytes, origins, readBody, readJson, secureResponse } from './http';
 import { handleMcp, MAX_MCP_BODY } from './mcp';
+import { deleteFilePermanently, restoreFile, trashFile } from './trash';
+import { getFileFilters } from './file-query';
+import { manageFiles } from './bulk';
+import type { BulkAction } from '../shared/types';
 
 async function route(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
@@ -29,10 +33,41 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
     }
     if (url.pathname === '/api/files' && request.method === 'GET') {
       return json(await listFiles(env, url.searchParams.get('cursor'),
-        url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : undefined));
+        url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : undefined,
+        (url.searchParams.get('view') ?? 'files') as FileView,
+        { q: url.searchParams.get('q') ?? '', type: url.searchParams.get('type') ?? '', author: url.searchParams.get('author') ?? '' }));
+    }
+    if (url.pathname === '/api/files/filters' && request.method === 'GET') {
+      return json(await getFileFilters(env, (url.searchParams.get('view') ?? 'files') as FileView));
+    }
+    if (url.pathname === '/api/files/bulk' && request.method === 'POST') {
+      const payload = await readJson(request);
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
+        Object.keys(payload).some(key => !['action', 'ids', 'confirm'].includes(key)) || !('action' in payload) || !('ids' in payload)) {
+        throw new HttpError(400, 'Send an action and file IDs.');
+      }
+      return json(await manageFiles(env, user, payload.action as BulkAction, payload.ids as string[],
+        'confirm' in payload && payload.confirm === true));
     }
     const file = /^\/api\/files\/([0-9a-f-]{36})$/.exec(url.pathname);
     if (file && request.method === 'GET') return json(await getFile(env, file[1]!));
+    if (file && request.method === 'DELETE') {
+      const payload = await readJson(request);
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
+        Object.keys(payload).length !== 1 || !('confirm' in payload) || payload.confirm !== true) {
+        throw new HttpError(400, 'Confirm permanent deletion with {"confirm":true}.');
+      }
+      return json(await deleteFilePermanently(env, file[1]!, true));
+    }
+    const action = /^\/api\/files\/([0-9a-f-]{36})\/(trash|restore)$/.exec(url.pathname);
+    if (action && request.method === 'POST') {
+      const payload = await readJson(request);
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).length) {
+        throw new HttpError(400, 'Send an empty JSON object. Identity comes from Access.');
+      }
+      return json(action[2] === 'trash'
+        ? await trashFile(env, user, action[1]!) : await restoreFile(env, action[1]!));
+    }
     const preview = /^\/api\/files\/([0-9a-f-]{36})\/thumbnail$/.exec(url.pathname);
     if (preview && request.method === 'GET') return thumbnail(env, preview[1]!);
     if (url.pathname === '/api/uploads' && request.method === 'POST') {

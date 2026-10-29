@@ -18,8 +18,8 @@
     "ACCESS_AUD": "",
     "SERVICE_TOKEN_LABELS": "{}",
     "LOCAL_DEV_EMAIL": "developer@example.test",
-    "MAX_FILE_BYTES": "26214400",
-    "ALLOWED_FILE_TYPES": "image/*,.html,.htm,.md,.markdown,.csv"
+    "MAX_FILE_BYTES": "104857600",
+    "ALLOWED_FILE_TYPES": "image/*,.html,.htm,.md,.markdown,.csv,.pdf"
   },
   "d1_databases": [{
     "binding": "DB",

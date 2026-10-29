@@ -5,10 +5,13 @@ A private file shelf for teams. Drop files or folders, then copy links that open
 ## Features
 
 - Drop files and folders, or select them from your computer.
-- Configure allowed file types through a Worker variable. The default includes HTML, images, Markdown, and CSV. Skip unsupported files and report the result.
+- Configure allowed file types through a Worker variable. The default includes HTML, images, Markdown, CSV, and PDF. Skip unsupported files and report the result.
 - Keep folder paths so relative image links work.
 - Show new files first, with infinite scroll, uploader identity, upload date, and copy actions.
+- Search file names and filter by file type or author across the full file history.
+- Select files across pages. Copy their links, move them to Trash, restore them, or delete them permanently.
 - Open or download each file through a stable, protected URL.
+- Move files to Trash, restore their original links, and delete files permanently from Trash.
 - Use email codes to sign in with Cloudflare Access.
 - Give agents the same file service through a remote MCP server.
 - Run separate instances from one codebase.
@@ -59,34 +62,53 @@ Keep all instance settings outside the repository. The setup script creates depl
 Set the `ALLOWED_FILE_TYPES` Worker variable to a comma-separated list of extensions or MIME types:
 
 ```text
-image/*,.html,.htm,.md,.markdown,.csv
+image/*,.html,.htm,.md,.markdown,.csv,.pdf
 ```
 
 The browser picker, folder filter, server checks, and MCP tools use this setting. For deployment, set `allowedFileTypes` in your private instance file, generate the configuration again, and redeploy. A dashboard variable change must also be saved in that private file so a later deployment does not replace it.
 
-Markdown and CSV links open as UTF-8 text in the browser. Download links keep the original bytes, name, and media type. Existing file links stay valid when you change the upload allowlist.
+PDF links open in the browser PDF viewer. Markdown and CSV links open as UTF-8 text in the browser. Download links keep the original bytes, name, and media type. Existing file links stay valid when you change the upload allowlist.
 
 ## Connect an agent
 
 Add `https://YOUR_APP_HOST/mcp` as a remote HTTP MCP server in your client. Select OAuth and complete the Access login. The client must support OAuth resource indicators (RFC 8707).
+
+In the web app, open your account menu and select **Connect MCP**. This section shows the instance URL, sign-in steps, Codex CLI commands, available tools, and upload limits.
 
 Available tools:
 
 | Tool | Purpose |
 | --- | --- |
 | `whoami` | Show the verified upload identity |
-| `list_files` | List files and get the next page cursor |
+| `list_files` | Search and filter files, and get the next page cursor |
+| `get_file_filters` | Get file types and authors for the selected view |
 | `get_file` | Get a file record and protected URLs |
 | `create_upload` | Start a group for files that share relative paths |
 | `upload_file` | Upload an allowed text or binary file and return its URLs |
+| `trash_file` | Move a file to Trash and stop serving its links |
+| `restore_file` | Restore a file and its original links |
+| `delete_file_permanently` | Remove a file from Trash after explicit confirmation |
+| `trash_files`, `restore_files`, `delete_files_permanently` | Manage up to 10 selected file IDs per call |
 
 For a folder, call `create_upload`, then pass its `uploadId` and each relative path to `upload_file`. HTML and its images must share the same upload group.
 
 The [MCP guide](docs/mcp.md) includes authentication, tool examples, larger uploads, and service identities.
 
+## Trash
+
+Open a file's options menu and select **Move to Trash**. Open **Trash** from the account menu to restore it or select **Delete permanently**. Permanent deletion requires a confirmation and only works on files already in Trash.
+
+Use the checkboxes for bulk actions. The header checkbox selects loaded files. **Select all matching files** includes all pages for the current search and filters. Changing a filter or leaving the view clears the selection.
+
+In Trash, **Delete all** collects every file across all pages, including files hidden by filters. The confirmation shows the captured count. Files added after that step are excluded. A failed deletion can be retried for only the files that failed.
+
+Any approved team member can manage Trash. Service identities use the same rules. Files in Trash stop serving content and previews, but keep their stored bytes until permanent deletion. Restore keeps the original path, uploader, date, and URL. Files have no automatic expiry in Trash.
+
+Permanent deletion removes the R2 object and file record. A file ID and path hash remain to make retries safe and prevent reuse of a deleted URL. To upload a replacement at the same relative path after permanent deletion, start a new upload group.
+
 ## Limits
 
-- Default file limit: 25 MiB. MCP inline uploads have a 5 MiB decoded limit. Larger files can use the authenticated HTTP upload endpoint.
+- Default file limit: 100 MiB. MCP inline uploads have a 5 MiB decoded limit. Larger files can use the authenticated HTTP upload endpoint.
 - Browser image support varies. An accepted image can still be downloaded if the browser cannot display it.
 - Separate CSS, JavaScript, fonts, and other types are skipped by the default allowlist. You can enable them in the Worker variable. HTML can contain inline CSS and JavaScript, and can reference accepted files in its upload group.
 - Uploaded HTML has a content security policy that blocks network API calls, form submissions, objects, and framing. See [security](docs/security.md).

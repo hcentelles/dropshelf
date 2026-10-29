@@ -15,17 +15,18 @@
         <span class="access-label"><i class="ph ph-lock-simple" aria-hidden="true"></i> Team access</span>
         <details class="account-menu">
           <summary><span class="avatar" id="user-avatar">DS</span><span id="user-email">Loading…</span><i class="ph ph-caret-down" aria-hidden="true"></i></summary>
-          <div class="menu-panel"><button id="copy-mcp"><i class="ph ph-plugs-connected" aria-hidden="true"></i> Copy MCP URL</button><a href="/cdn-cgi/access/logout">Sign out</a></div>
+          <div class="menu-panel"><a href="#trash" data-section="trash"><i class="ph ph-trash" aria-hidden="true"></i> Trash</a><a href="#mcp" id="connect-mcp" data-section="mcp"><i class="ph ph-plugs-connected" aria-hidden="true"></i> Connect MCP</a><a href="/cdn-cgi/access/logout"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</a></div>
         </details>
       </div>
     </header>
     <main>
-      <div class="page-heading"><h1>Shared files</h1><p>Pages, images, and documents for the team.</p></div>
+      <div id="files-view">
+      <div class="page-heading-row"><div class="page-heading"><h1 id="files-page-heading" tabindex="-1">Shared files</h1><p>Pages, images, and documents for the team.</p></div></div>
       <section class="drop-zone" id="drop-zone" aria-label="File upload" aria-busy="false">
         <i class="ph ph-cloud-arrow-up upload-icon" aria-hidden="true"></i>
         <h2>Drop files or folders here</h2>
         <p id="supported-types">Loading supported file types…</p>
-        <div class="upload-actions"><button class="button primary" id="select-files">Select files</button><button class="button quiet" id="select-folder">Select folder</button></div>
+        <div class="upload-actions"><button class="button primary" id="select-files"><i class="ph ph-upload-simple" aria-hidden="true"></i> <span>Select files</span></button><button class="button quiet" id="select-folder"><i class="ph ph-folder-open" aria-hidden="true"></i> <span>Select folder</span></button></div>
         <span class="upload-limit" id="upload-limit">Loading upload settings…</span>
         <input type="file" id="file-input" multiple hidden />
         <input type="file" id="folder-input" webkitdirectory multiple hidden />
@@ -34,15 +35,161 @@
       <section class="notice" id="notice" hidden role="status" aria-live="polite"><i class="ph ph-check-circle" id="notice-icon" aria-hidden="true"></i><span id="notice-text"></span><button class="button" id="copy-new" hidden></button><button class="icon-button" id="dismiss-notice" aria-label="Dismiss message"><i class="ph ph-x" aria-hidden="true"></i></button></section>
       <section class="files-section" aria-labelledby="files-heading">
         <div class="list-heading"><div><h2 id="files-heading">All files</h2><p id="file-count">Loading files…</p></div><span class="sort-label">Newest first<i class="ph ph-arrow-down" aria-hidden="true"></i></span></div>
-        <div class="table-wrap">
-          <table><thead><tr><th scope="col">Name</th><th scope="col">Uploaded by</th><th scope="col">Link</th><th scope="col">Date</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody id="file-list"></tbody></table>
-          <div class="empty-state" id="empty-state" hidden><i class="ph ph-files" aria-hidden="true"></i><h3>Your shelf is ready</h3><p>Drop your first file above.<br />Your team’s files will appear here.</p></div>
+        <div class="file-filters" role="search" aria-label="Shared file search">
+          <label class="search-field"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search files by name</span><input type="search" id="search" placeholder="Search file names…" maxlength="200" autocomplete="off" /></label>
+          <label class="filter-field"><i class="ph ph-funnel-simple" aria-hidden="true"></i><span class="sr-only">File type</span><select id="filter-type"><option value="">All file types</option></select></label>
+          <label class="filter-field"><i class="ph ph-user" aria-hidden="true"></i><span class="sr-only">Author</span><select id="filter-author"><option value="">All authors</option></select></label>
+          <button class="button quiet" id="clear-filters" hidden><i class="ph ph-x" aria-hidden="true"></i> Clear filters</button>
         </div>
-        <div class="list-footer" id="list-footer" aria-live="polite"><span id="list-status">Loading files…</span><button class="button" id="load-more" hidden>Load more files</button><button class="button" id="retry-list" hidden>Try again</button></div>
+        <div class="bulk-toolbar" id="bulk-toolbar" hidden role="region" aria-label="File selection actions">
+          <span id="selection-count" role="status" aria-live="polite"></span>
+          <button class="button quiet" id="clear-selection"><i class="ph ph-x" aria-hidden="true"></i> Clear selection</button>
+          <button class="button quiet" id="select-matching"><i class="ph ph-checks" aria-hidden="true"></i> Select all matching files</button>
+          <div class="bulk-actions"><button class="button" id="bulk-copy"><i class="ph ph-copy" aria-hidden="true"></i> Copy links</button><button class="button danger-outline" id="bulk-trash"><i class="ph ph-trash" aria-hidden="true"></i> Move to Trash</button></div></div>
+        <div class="table-wrap">
+          <table><thead><tr><th scope="col" class="col-select"><input type="checkbox" id="select-all" aria-label="Select all loaded files" disabled /></th><th scope="col" class="col-name">Name</th><th scope="col" class="col-author">Uploaded by</th><th scope="col" class="col-link">Link</th><th scope="col" class="col-date">Date</th><th scope="col" class="col-actions"><span class="sr-only">Actions</span></th></tr></thead><tbody id="file-list"></tbody></table>
+          <div class="empty-state" id="empty-state" hidden><i class="ph ph-files" aria-hidden="true"></i><h3>Your shelf is ready</h3><p>Drop your first file above.<br />Your team’s files will appear here.</p></div><div class="empty-state" id="no-results" hidden><i class="ph ph-magnifying-glass" aria-hidden="true"></i><h3>No matching files</h3><p>Change the search or filters and try again.</p><button class="button" id="reset-search"><i class="ph ph-x" aria-hidden="true"></i> Clear filters</button></div>
+        </div>
+        <div class="list-footer" id="list-footer" aria-live="polite"><span id="list-status">Loading files…</span><button class="button" id="load-more" hidden><i class="ph ph-arrow-down" aria-hidden="true"></i> Load more files</button><button class="button" id="retry-list" hidden><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Try again</button></div>
         <div id="scroll-sentinel" aria-hidden="true"></div>
+      </section>
+      </div>
+      <section id="trash-view" aria-labelledby="trash-heading" hidden>
+        <a class="back-link" href="#"><i class="ph ph-arrow-left" aria-hidden="true"></i> Back to files</a>
+        <div class="page-heading-row"><div class="page-heading"><h1 id="trash-heading" tabindex="-1">Trash</h1><p>Restore files or delete them permanently.</p></div><button class="button danger-outline" id="trash-delete-all" disabled><i class="ph ph-trash" aria-hidden="true"></i> <span>Delete all</span></button></div>
+        <p class="trash-note"><i class="ph ph-info" aria-hidden="true"></i> Files stay here until a team member restores or permanently deletes them. Shared links are inactive while files are in Trash.</p>
+        <section class="files-section" aria-labelledby="trash-files-heading">
+          <div class="list-heading"><div><h2 id="trash-files-heading">Files in Trash</h2><p id="trash-file-count">Loading files…</p></div><span class="sort-label">Most recently trashed<i class="ph ph-arrow-down" aria-hidden="true"></i></span></div>
+          <div class="file-filters" role="search" aria-label="Trash search">
+          <label class="search-field"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search Trash by name</span><input type="search" id="trash-search" placeholder="Search file names…" maxlength="200" autocomplete="off" /></label>
+          <label class="filter-field"><i class="ph ph-funnel-simple" aria-hidden="true"></i><span class="sr-only">Trash file type</span><select id="trash-filter-type"><option value="">All file types</option></select></label>
+          <label class="filter-field"><i class="ph ph-user" aria-hidden="true"></i><span class="sr-only">Trash author</span><select id="trash-filter-author"><option value="">All authors</option></select></label>
+          <button class="button quiet" id="trash-clear-filters" hidden><i class="ph ph-x" aria-hidden="true"></i> Clear filters</button>
+        </div>
+        <div class="bulk-toolbar" id="trash-bulk-toolbar" hidden role="region" aria-label="Trash selection actions">
+          <span id="trash-selection-count" role="status" aria-live="polite"></span>
+          <button class="button quiet" id="trash-clear-selection"><i class="ph ph-x" aria-hidden="true"></i> Clear selection</button>
+          <button class="button quiet" id="trash-select-matching"><i class="ph ph-checks" aria-hidden="true"></i> Select all matching files</button>
+          <div class="bulk-actions"><button class="button" id="trash-bulk-restore"><i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> Restore</button><button class="button danger-outline" id="trash-bulk-delete"><i class="ph ph-trash" aria-hidden="true"></i> Delete permanently</button></div></div>
+        <div class="table-wrap">
+            <table><thead><tr><th scope="col" class="col-select"><input type="checkbox" id="trash-select-all" aria-label="Select all loaded Trash files" disabled /></th><th scope="col" class="col-name">Name</th><th scope="col" class="col-author">Uploaded by</th><th scope="col" class="col-link">Trashed by</th><th scope="col" class="col-date">Trashed</th><th scope="col" class="col-actions"><span class="sr-only">Actions</span></th></tr></thead><tbody id="trash-file-list"></tbody></table>
+            <div class="empty-state" id="trash-empty-state" hidden><i class="ph ph-trash" aria-hidden="true"></i><h3>Trash is empty</h3><p>Files moved to Trash will appear here.</p></div><div class="empty-state" id="trash-no-results" hidden><i class="ph ph-magnifying-glass" aria-hidden="true"></i><h3>No matching files</h3><p>Change the search or filters and try again.</p><button class="button" id="trash-reset-search"><i class="ph ph-x" aria-hidden="true"></i> Clear filters</button></div>
+          </div>
+          <div class="list-footer" aria-live="polite"><span id="trash-list-status">Loading files…</span><button class="button" id="trash-load-more" hidden><i class="ph ph-arrow-down" aria-hidden="true"></i> Load more files</button><button class="button" id="trash-retry-list" hidden><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Try again</button></div>
+          <div id="trash-scroll-sentinel" aria-hidden="true"></div>
+        </section>
+      </section>
+      <section id="mcp-view" class="mcp-view" aria-labelledby="mcp-heading" hidden>
+        <a class="back-link" href="#"><i class="ph ph-arrow-left" aria-hidden="true"></i> Back to files</a>
+        <div class="page-heading mcp-heading">
+          <span class="mcp-label"><i class="ph ph-plugs-connected" aria-hidden="true"></i> Agent connection</span>
+          <h1 id="mcp-heading" tabindex="-1">Connect MCP</h1>
+          <p>Let your agent upload files and get shared links.</p>
+        </div>
+        <p class="mcp-local-note" id="mcp-local-note" hidden>This local instance uses a test identity. Skip the sign-in step.</p>
+        <ol class="mcp-steps" role="list" aria-label="MCP setup steps">
+          <li>
+            <span class="step-number" aria-hidden="true">1</span>
+            <div class="step-content">
+              <h2>Add the server to your client</h2>
+              <p>Open your MCP client settings and add a remote server. Paste this URL and select Streamable HTTP if the client asks for a transport.</p>
+              <label class="mcp-url-label" for="mcp-server-url">Server URL</label>
+              <div class="mcp-url-row">
+                <input id="mcp-server-url" class="mcp-url" type="text" readonly spellcheck="false" placeholder="Loading server URL…" />
+                <button class="button" id="copy-mcp-url" disabled><i class="ph ph-copy" aria-hidden="true"></i> Copy URL</button>
+              </div>
+              <p class="mcp-connection-error" id="mcp-connection-error" role="alert" hidden></p>
+              <dl class="connection-details">
+                <div><dt>Transport</dt><dd>Streamable HTTP</dd></div>
+                <div><dt>Authentication</dt><dd id="mcp-auth-method">OAuth · Cloudflare Access</dd></div>
+              </dl>
+              <details class="setup-details">
+                <summary>Use the Codex CLI<i class="ph ph-caret-down" aria-hidden="true"></i></summary>
+                <div class="setup-details-body">
+                  <p>Run these commands in your terminal:</p>
+                  <div class="command-block"><pre><code id="mcp-codex-command">Loading commands…</code></pre><button class="button command-copy" id="copy-mcp-command" disabled><i class="ph ph-copy" aria-hidden="true"></i> Copy commands</button></div>
+                  <p class="setup-hint">For more than one instance, use a unique server name in place of <code>dropshelf</code>.</p>
+                  <a class="help-source" href="https://learn.chatgpt.com/docs/extend/mcp?surface=cli" target="_blank" rel="noopener noreferrer">Codex MCP documentation<i class="ph ph-arrow-up-right" aria-hidden="true"></i></a>
+                </div>
+              </details>
+            </div>
+          </li>
+          <li>
+            <span class="step-number" aria-hidden="true">2</span>
+            <div class="step-content">
+              <h2>Sign in with Cloudflare Access</h2>
+              <p id="mcp-sign-in">Start OAuth sign-in from your MCP client. In the browser, enter an email address that has access to this instance. Enter the email code, then select Allow to approve the connection.</p>
+              <p class="setup-hint" id="mcp-auth-note">Complete this sign-in from your MCP client, even if you are already signed in to the web app. The client handles your OAuth tokens.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-number" aria-hidden="true">3</span>
+            <div class="step-content">
+              <h2>Check the connection</h2>
+              <p>Start a chat in your client and ask your agent:</p>
+              <blockquote class="mcp-test-prompt">Call <code>whoami</code>, then <code>list_files</code> on this MCP server.</blockquote>
+              <p class="setup-hint" id="mcp-check-identity">The identity should show your approved email address. File links require Cloudflare Access sign-in too.</p>
+            </div>
+          </li>
+        </ol>
+        <div class="mcp-reference-grid">
+          <section class="setup-card" aria-labelledby="mcp-tools-heading">
+            <h2 id="mcp-tools-heading">Available tools</h2>
+            <dl class="mcp-tools">
+              <div><dt><code>whoami</code></dt><dd>Check your upload identity.</dd></div>
+              <div><dt><code>list_files</code></dt><dd>Search by file name and filter by type or author.</dd></div><div><dt><code>get_file_filters</code></dt><dd>Get file types and authors.</dd></div>
+              <div><dt><code>get_file</code></dt><dd>Get file and download links.</dd></div>
+              <div><dt><code>create_upload</code></dt><dd>Start a file or folder upload.</dd></div>
+              <div><dt><code>upload_file</code></dt><dd>Upload text or binary files.</dd></div>
+              <div><dt><code>trash_file</code></dt><dd>Move a file to Trash.</dd></div>
+              <div><dt><code>restore_file</code></dt><dd>Restore the original file link.</dd></div>
+              <div><dt><code>delete_file_permanently</code></dt><dd>Delete a file from Trash after confirmation.</dd></div>
+            </dl>
+            <p>Use <code>trash_files</code>, <code>restore_files</code>, or <code>delete_files_permanently</code> for up to 10 files per call.</p><p>Use <code>list_files</code> with <code>view: "trash"</code> to list Trash. Permanent deletion requires <code>confirm: true</code>.</p>
+          </section>
+          <section class="setup-card" aria-labelledby="mcp-upload-heading">
+            <h2 id="mcp-upload-heading">Files and folders</h2>
+            <p><strong>Allowed types:</strong> <span id="mcp-allowed-types">Loading…</span></p>
+            <p><strong>Inline MCP uploads:</strong> up to 5 MiB per file.</p>
+            <p><strong>Web and HTTP uploads:</strong> <span id="mcp-file-limit">Loading…</span></p>
+            <p>For a folder, call <code>create_upload</code> once. Reuse its <code>uploadId</code> and keep each relative path so HTML can load its images.</p>
+            <p class="setup-hint">For larger files, use the web app or ask <code>create_upload</code> for an HTTP upload URL. HTTP requests must use the same Access OAuth token.</p>
+          </section>
+        </div>
+        <details class="setup-details setup-card">
+          <summary>Connection help<i class="ph ph-caret-down" aria-hidden="true"></i></summary>
+          <div class="setup-details-body">
+            <ul class="setup-help-list">
+              <li>If sign-in is blocked, ask the instance administrator to approve your email address.</li>
+              <li>If your session has ended, sign in again from your MCP client.</li>
+              <li>If sign-in does not start, check that your client supports Streamable HTTP and OAuth resource indicators (RFC 8707).</li>
+              <li>If tools do not appear after setup, reload the MCP connection or start a new chat.</li>
+            </ul>
+          </div>
+        </details>
+        <details class="setup-details setup-card">
+          <summary>Agents without a browser<i class="ph ph-caret-down" aria-hidden="true"></i></summary>
+          <div class="setup-details-body">
+            <p>An administrator must enable Cloudflare Access service-token authentication and configure an agent display label first.</p>
+            <p>Store the client ID and secret in the agent's secret store. Configure the client to send these headers:</p>
+            <pre class="service-headers"><code>CF-Access-Client-Id: YOUR_SERVICE_CLIENT_ID
+CF-Access-Client-Secret: YOUR_SERVICE_CLIENT_SECRET</code></pre>
+            <p class="setup-hint">These uploads show the configured agent label. They have no uploader email.</p>
+          </div>
+        </details>
       </section>
       <noscript><p class="notice">Enable JavaScript to upload and list files.</p></noscript>
     </main>
+    <dialog id="delete-file-dialog" class="confirm-dialog" aria-labelledby="delete-file-heading" aria-describedby="delete-file-description">
+      <i class="ph ph-warning-circle delete-warning" aria-hidden="true"></i>
+      <h2 id="delete-file-heading">Delete permanently?</h2>
+      <p id="delete-file-name" class="delete-file-name"></p>
+      <p id="delete-file-meta"></p>
+      <p id="delete-file-description">This removes these files from storage. You cannot restore them.</p>
+      <p id="delete-file-error" class="delete-file-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button class="button" id="cancel-delete-file" autofocus><i class="ph ph-x" aria-hidden="true"></i> Cancel</button><button class="button danger" id="confirm-delete-file"><i class="ph ph-trash" aria-hidden="true"></i> <span>Delete permanently</span></button></div>
+    </dialog>
+    <dialog id="copy-links-dialog" class="confirm-dialog" aria-labelledby="copy-links-heading"><h2 id="copy-links-heading">Copy links</h2><p>Copy these links from the text box.</p><label class="sr-only" for="copy-links-text">Selected file links</label><textarea id="copy-links-text" readonly rows="8"></textarea><form method="dialog" class="dialog-actions"><button class="button"><i class="ph ph-x" aria-hidden="true"></i> Close</button></form></dialog>
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
     <script type="module" src="/main.ts"></script>
   </body>

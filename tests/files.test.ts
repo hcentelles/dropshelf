@@ -1,12 +1,10 @@
 import { env, exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
-import schema from '../migrations/0001_files.sql?raw';
+import { prepareDatabase } from './database';
 import type { FilePage, SharedFile } from '../shared/types';
 import { createUpload, uploadFile } from '../worker/files';
 
-beforeAll(async () => {
-  await env.DB.batch(schema.split(';').map(sql => sql.trim()).filter(Boolean).map(sql => env.DB.prepare(sql)));
-});
+beforeAll(prepareDatabase);
 
 const app = 'http://localhost:8787';
 const content = 'http://127.0.0.1:8787';
@@ -114,7 +112,7 @@ describe('private file service', () => {
   it('rejects oversized files before it reserves a path', async () => {
     const id = await createUpload(env, user);
     await expect(uploadFile(env, user, {
-      uploadId: id, path: 'large.png', type: 'image/png', size: 100 * 1024 * 1024,
+      uploadId: id, path: 'large.png', type: 'image/png', size: Number(env.MAX_FILE_BYTES) + 1,
       body: new Uint8Array(), source: 'web',
     })).rejects.toMatchObject({ status: 413 });
     expect(await env.DB.prepare('SELECT id FROM files WHERE upload_id = ?').bind(id).first()).toBeNull();

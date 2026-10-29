@@ -19,55 +19,83 @@ function link(label: string, url: string, className = ''): HTMLAnchorElement {
   return node;
 }
 
-export function fileRow(file: SharedFile, fresh: boolean): HTMLTableRowElement {
+interface FileActions {
+  trash?: (file: SharedFile) => Promise<void>;
+  restore?: (file: SharedFile) => Promise<void>;
+  deletePermanently?: (file: SharedFile) => void;
+}
+
+export function fileRow(file: SharedFile, fresh: boolean, callbacks: FileActions): HTMLTableRowElement {
+  const inTrash = file.trashedAt !== null;
   const row = document.createElement('tr');
   row.dataset.fileId = file.id;
   if (fresh) row.classList.add('is-new');
   const nameCell = document.createElement('td');
+  nameCell.className = 'col-name';
   const nameWrap = text('div', '', 'file-name-wrap');
   const isImage = file.contentType.startsWith('image/');
   const preview = text('div', '', `file-preview ${file.contentType === 'text/html' ? 'html-preview' : !isImage ? 'document-preview' : ''}`);
-  if (canPreview(file.contentType) && file.contentType !== 'image/svg+xml') {
+  if (!inTrash && canPreview(file.contentType) && file.contentType !== 'image/svg+xml') {
     const img = document.createElement('img');
     img.src = `/api/files/${file.id}/thumbnail`;
     img.alt = '';
     img.loading = 'lazy';
     img.addEventListener('error', () => { img.remove(); preview.append(icon('image')); }, { once: true });
     preview.append(img);
-  } else { preview.append(icon(file.contentType === 'text/html' ? 'file-code' : isImage ? 'image' : file.contentType === 'text/csv' ? 'table' : 'file-text')); }
+  } else { preview.append(icon(file.contentType === 'text/html' ? 'file-code' : isImage ? 'image' : file.contentType === 'text/csv' ? 'table' : file.contentType === 'application/pdf' ? 'file-pdf' : 'file-text')); }
   const details = text('div', '', 'file-details');
   const title = text('div', '', 'file-title');
-  title.append(link(file.name, file.url));
+  title.append(inTrash ? text('span', file.name, 'file-name') : link(file.name, file.url));
+  if (file.deletionPending) {
+    const pending = text('span', 'Delete pending', 'pending-badge');
+    pending.title = 'Permanent deletion has started. Use Retry permanent delete to finish.';
+    title.append(pending);
+  }
   if (fresh) title.append(text('span', 'New', 'new-badge'));
   const type = file.contentType === 'text/html' ? 'HTML' : (file.name.split('.').at(-1) ?? 'Image').toUpperCase();
-  const mobileMeta = text('div', `${file.uploaderLabel} · ${new Date(file.createdAt).toLocaleDateString('en')}`, 'mobile-meta');
+  const dateValue = file.trashedAt ?? file.createdAt;
+  const mobileMeta = text('div', `${file.uploaderLabel} · ${new Date(dateValue).toLocaleDateString('en')}`, 'mobile-meta');
   details.append(title, text('div', `${type} · ${formatSize(file.size)}`, 'file-meta'), mobileMeta);
   details.title = file.path;
   nameWrap.append(preview, details);
   nameCell.append(nameWrap);
   const uploader = document.createElement('td');
+  uploader.className = 'col-author';
   const person = text('div', '', 'person');
   person.append(text('span', initials(file.uploaderLabel), 'avatar small'), text('span', file.uploaderLabel, 'person-label'));
   if (file.source === 'mcp') person.append(text('span', 'MCP', 'source-badge'));
   uploader.append(person);
   const linkCell = document.createElement('td');
-  const fileLink = link(`…/${file.path}`, file.url, 'file-link');
-  fileLink.title = file.url;
-  fileLink.append(icon('arrow-square-out'));
-  linkCell.append(fileLink);
+  linkCell.className = 'col-link';
+  if (inTrash) {
+    const actor = text('span', file.trashedBy ?? '', 'person-label trash-actor');
+    actor.title = file.trashedBy ?? '';
+    linkCell.append(actor);
+  } else {
+    const fileLink = link(`…/${file.path}`, file.url, 'file-link');
+    fileLink.title = file.url;
+    fileLink.append(icon('arrow-square-out'));
+    linkCell.append(fileLink);
+  }
   const date = document.createElement('td');
+  date.className = 'col-date';
   const time = document.createElement('time');
-  time.dateTime = new Date(file.createdAt).toISOString();
-  time.textContent = new Intl.DateTimeFormat('en', { day: 'numeric', month: 'short', year: 'numeric' }).format(file.createdAt);
-  time.title = new Date(file.createdAt).toLocaleString('en');
+  time.dateTime = new Date(dateValue).toISOString();
+  time.textContent = new Intl.DateTimeFormat('en', { day: 'numeric', month: 'short', year: 'numeric' }).format(dateValue);
+  time.title = new Date(dateValue).toLocaleString('en');
   date.append(time);
   const actions = document.createElement('td');
+  actions.className = 'col-actions';
   const controls = text('div', '', 'row-actions');
   const copyButton = document.createElement('button');
   copyButton.className = 'copy-button';
-  copyButton.append(icon('copy'), text('span', 'Copy link'));
-  copyButton.setAttribute('aria-label', `Copy link for ${file.name}`);
-  copyButton.addEventListener('click', () => { void copy(file.url); });
+  copyButton.append(icon(inTrash ? 'arrow-counter-clockwise' : 'copy'), text('span', inTrash ? 'Restore' : 'Copy link'));
+  copyButton.setAttribute('aria-label', inTrash ? `Restore ${file.name}` : `Copy link for ${file.name}`);
+  copyButton.disabled = file.deletionPending;
+  if (file.deletionPending) copyButton.title = 'Permanent deletion has started. This file cannot be restored.';
+  copyButton.addEventListener('click', () => {
+    if (inTrash && callbacks.restore) void run(callbacks.restore); else void copy(file.url);
+  });
   const menu = document.createElement('details');
   menu.className = 'file-menu';
   const summary = document.createElement('summary');
@@ -75,10 +103,36 @@ export function fileRow(file: SharedFile, fresh: boolean): HTMLTableRowElement {
   summary.setAttribute('aria-label', `More options for ${file.name}`);
   summary.append(icon('dots-three'));
   const panel = text('div', '', 'menu-panel');
-  panel.append(link('Open file', file.url), link('Download file', file.downloadUrl));
+  const remove = document.createElement('button');
+  remove.className = 'menu-danger';
+  remove.append(icon('trash'), text('span', inTrash ? file.deletionPending ? 'Retry permanent delete' : 'Delete permanently' : 'Move to Trash'));
+  remove.addEventListener('click', () => {
+    menu.open = false;
+    if (inTrash) callbacks.deletePermanently?.(file);
+    else if (callbacks.trash) void run(callbacks.trash);
+  });
+  if (!inTrash) {
+    const open = link('Open file', file.url);
+    open.prepend(icon('arrow-square-out'));
+    const download = link('Download file', file.downloadUrl);
+    download.prepend(icon('download-simple'));
+    panel.append(open, download);
+  }
+  panel.append(remove);
   menu.append(summary, panel);
   controls.append(copyButton, menu);
   actions.append(controls);
   row.append(nameCell, uploader, linkCell, date, actions);
   return row;
+
+  async function run(action: (file: SharedFile) => Promise<void>): Promise<void> {
+    const buttons = [...row.querySelectorAll('button')].map(button => ({ button, disabled: button.disabled }));
+    for (const { button } of buttons) button.disabled = true;
+    row.setAttribute('aria-busy', 'true');
+    try { await action(file); }
+    finally {
+      for (const { button, disabled } of buttons) button.disabled = disabled;
+      row.removeAttribute('aria-busy');
+    }
+  }
 }

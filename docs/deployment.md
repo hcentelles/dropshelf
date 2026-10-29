@@ -54,11 +54,15 @@ In the target account, open Zero Trust. Enable an appropriate plan if needed. A 
 4. Add both app and content hostnames as public hostnames in this one application.
 5. Add an **Allow** policy with the exact email addresses that can use the instance. Use an email-domain rule only when the whole domain should have access.
 6. Enable only the One-time PIN identity provider for this application.
-7. Keep the authorization cookie **HttpOnly**. Set a session duration suitable for your team.
-8. In **Advanced settings**, enable **Managed OAuth**. Enable dynamic client registration for the MCP clients you will use. Loopback callbacks are needed by many desktop clients.
+7. In **Application details → Details**, set **Session Duration** to **2 weeks**. Leave the Allow policy's session duration at **Same as application**. Keep the authorization cookie **HttpOnly**.
+8. In **Additional settings → Managed OAuth**, enable Managed OAuth and dynamic client registration. Set **Grant session duration** to **2 weeks** and **Access token lifetime** to **15 minutes**. Add the return addresses for your MCP clients. Loopback callbacks are needed by many desktop clients. See [chat client setup](mcp.md#chat-client-setup) for ChatGPT and Claude Chat.
 9. Copy the application's **AUD tag** and your Zero Trust team domain, such as `your-team.cloudflareaccess.com`.
 
 The OAuth setting belongs to our Access application. The Worker validates Access JWTs; it does not run a separate OAuth server. This is the [Cloudflare Managed OAuth flow](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/managed-oauth/).
+
+These settings give new browser sessions a 14-day lifetime. MCP clients can use a refresh token to renew their 15-minute access token within a 14-day grant. Daily use does not make the grant last forever. When it ends, Access requires authorization again. A valid Access login can reduce the sign-in steps. See [session behavior](mcp.md#session-duration-and-renewal).
+
+For an API-managed instance, the application fields are `session_duration: "336h"`, `oauth_configuration.grant.session_duration: "336h"`, and `oauth_configuration.grant.access_token_lifetime: "15m"`. Read the current application before an update and preserve its other settings, including policies, hostnames, identity providers, and client return addresses. Do not change the account-wide session duration for this instance.
 
 Use one Access application for both hostnames so one OAuth token can reach the app API and content URLs. Keep the default cookie setup that signs browser users into all application hostnames. If you use separate Access applications, you must configure their audiences and delegated access separately; this setup script expects one audience.
 
@@ -73,7 +77,7 @@ mkdir -p "$HOME/.config/dropshelf/demo"
 cp instance.example.json "$HOME/.config/dropshelf/demo/instance.json"
 ```
 
-Edit that copied file. Set the account ID, D1 UUID, bucket, exact app and content origins, Access team domain, and AUD tag. Change `appName` to set the name shown in the UI. Set `allowedFileTypes` to the allowed extensions and MIME types, such as `image/*,.html,.htm,.md,.markdown,.csv`. This becomes the `ALLOWED_FILE_TYPES` Worker variable. The two Worker names are `name` and `name-content`.
+Edit that copied file. Set the account ID, D1 UUID, bucket, exact app and content origins, Access team domain, and AUD tag. Change `appName` to set the name shown in the UI. Set `allowedFileTypes` to the allowed extensions and MIME types, such as `image/*,.html,.htm,.md,.markdown,.csv,.pdf`. This becomes the `ALLOWED_FILE_TYPES` Worker variable. The two Worker names are `name` and `name-content`.
 
 Generate deployment files:
 
@@ -110,6 +114,7 @@ Check the complete flow before you invite the team:
 8. Connect your MCP client using OAuth. Call `whoami`, upload a file, and verify the same email in the browser list.
 9. Confirm that an unapproved email cannot pass the Access policy.
 10. Confirm that the content hostname returns no UI, file list, or MCP tools.
+11. In each chat client, repeat a live `whoami` call at least 16 minutes after the initial OAuth connection. Do not reconnect between calls. Check the tool result, not only the model's answer. See the [renewal test](mcp.md#test-renewal-in-a-chat-client).
 
 A plain HTTP check is useful for the OAuth challenge:
 
@@ -129,8 +134,16 @@ The generated configuration keeps `workers.dev` enabled. The Worker rejects any 
 
 Keep the same R2 bucket and D1 database when you deploy a new code version. Apply new migrations before a version that needs them. Generate configuration again if you move the checkout, because its source paths are absolute.
 
+The Trash migration copies existing file records into a table with explicit Trash and deletion states. Back up D1 before applying it. Deploy the content Worker before the app Worker for this update, so both readers are ready before the new controls are available. Verify that the existing file count and links are preserved.
+
+Check file name search, type and author filters, and selection across pages. Check that **Delete all** shows the full Trash count when filters hide files. Do not confirm this action against files you need.
+
+Test the full Trash flow with a disposable sample file: move it to Trash, check that its content URL returns `404`, restore it and check the same URL, then confirm permanent deletion from Trash. The last step removes the sample's stored bytes.
+
 Use D1 Time Travel and exports for database recovery. Use R2 retention or a separate object backup if your team needs recoverable file copies. A D1 backup alone does not contain file bytes.
 
-A request that ends before upload completion can leave an invisible `uploading` record or an orphan R2 object. Ready file records are the file list's source of truth. Investigate old incomplete records before you remove them; do not delete objects linked to ready records. This version has no delete UI or automated retention job.
+A request that ends before upload completion can leave an invisible `uploading` record or an orphan R2 object. Ready file records are the file list's source of truth. Investigate old incomplete records before you remove them; do not delete objects linked to ready records.
+
+Trash has no automatic retention job. If permanent deletion starts but R2 or D1 fails, the file stays in a pending state in Trash and cannot be restored. Retry permanent deletion to finish it. Do not clear that state manually: the stored bytes may already be gone. A D1 backup cannot restore bytes removed from R2.
 
 To end an instance, first remove team access. Export data you need, then remove only that instance's Workers and resources. Shared resources from other instances must stay separate.

@@ -28,9 +28,12 @@ export function toast(message: string): void {
   toastTimer = setTimeout(() => { box.hidden = true; }, 2800);
 }
 
-export async function copy(text: string): Promise<void> {
-  try { await navigator.clipboard.writeText(text); toast('Link copied.'); }
-  catch { toast('Copy failed. Open the link and copy it from the address bar.'); }
+export async function copy(
+  text: string, successMessage = 'Link copied.',
+  failureMessage = 'Copy failed. Open the link and copy it from the address bar.',
+): Promise<boolean> {
+  try { await navigator.clipboard.writeText(text); toast(successMessage); return true; }
+  catch { toast(failureMessage); return false; }
 }
 
 export function icon(name: string): HTMLElement {

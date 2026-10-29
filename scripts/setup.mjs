@@ -57,7 +57,7 @@ try {
   if (appOrigin === contentOrigin) throw new Error('Use separate app and content origins.');
   const teamDomain = requireString(config, 'accessTeamDomain', /^[a-z0-9-]+\.cloudflareaccess\.com$/);
   const aud = requireString(config, 'accessAud', /^[a-f0-9]{64}$/);
-  const maxBytes = config.maxFileBytes ?? 26214400;
+  const maxBytes = config.maxFileBytes ?? 104857600;
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 104857600) throw new Error('Use a file limit from 1 byte to 100 MiB.');
   const allowed = parseAllowedFileTypes(config.allowedFileTypes ?? DEFAULT_ALLOWED_FILE_TYPES).join(',');
   const appName = config.appName ?? 'Drop Shelf';
