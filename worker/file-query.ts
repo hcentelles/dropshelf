@@ -1,15 +1,15 @@
-import type { FileFilters, FileFilterOptions, FilePage, FileQuery, FileView } from '../shared/types';
+import type { FileFilters, FileFilterOptions, FilePage, FileQuery, FileScope, FileView } from '../shared/types';
 import { fileTypeLabel } from '../shared/formats';
 import { present, type FileRow } from './file-record';
-import { HttpError } from './http';
+import { cleanPath, HttpError } from './http';
 
-function base(view: FileView): string {
+export function base(view: FileView): string {
   if (view === 'files') return "status = 'ready' AND trashed_at IS NULL AND delete_started_at IS NULL";
   if (view === 'trash') return "status IN ('trashed', 'deleting')";
   throw new HttpError(400, 'Use the files or trash view.');
 }
 
-function normalize(input: FileFilters): Required<FileFilters> {
+export function normalize(input: FileFilters): Required<FileFilters> {
   const q = input.q?.trim().normalize('NFC') ?? '';
   const type = input.type?.trim().toLowerCase() ?? '';
   const author = input.author?.trim() ?? '';
@@ -20,24 +20,44 @@ function normalize(input: FileFilters): Required<FileFilters> {
   return { q, type, author };
 }
 
-function encode(value: unknown): string {
+export function encode(value: unknown): string {
   return btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(value))));
 }
 
-function decode(value: string): unknown {
+export function decode(value: string): unknown {
   return JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(Uint8Array.from(atob(value), char => char.charCodeAt(0))));
 }
 
-export async function listFiles(env: Env, cursor: string | null, limit = 30, view: FileView = 'files', input: FileQuery = {}): Promise<FilePage> {
+export function normalizeScope(input: FileScope): Required<FileScope> {
+  const uploadId = input.uploadId ?? '';
+  const folder = input.folder ?? '';
+  if (!uploadId && !folder) return { uploadId: '', folder: '' };
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(uploadId) || !folder) {
+    throw new HttpError(400, 'A folder path and its upload ID are required.');
+  }
+  return { uploadId, folder: cleanPath(folder) };
+}
+
+export function scopedWhere(view: FileView, scope: Required<FileScope>) {
+  const prefix = scope.folder ? `${scope.folder}/` : '';
+  return {
+    where: base(view) + (prefix ? ' AND upload_id = ? AND substr(path, 1, length(?)) = ?' : ''),
+    params: prefix ? [scope.uploadId, prefix, prefix] : [],
+    prefix,
+  };
+}
+
+export function queryFiles(sql: SqlStorage, env: Env, cursor: string | null, limit = 30, view: FileView = 'files', input: FileQuery = {}): FilePage {
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new HttpError(400, 'Use a limit from 1 to 100.');
   const sort = input.sort ?? 'newest';
   if (!['newest', 'oldest', 'name'].includes(sort)) throw new HttpError(400, 'Use newest, oldest, or name for sorting.');
   const filters = normalize(input);
+  const scope = normalizeScope(input);
   // Keep existing newest-first cursors valid after deployment.
-  const key = JSON.stringify([filters.q, filters.type, filters.author, ...(sort === 'newest' ? [] : [sort])]);
-  const noFilters = !filters.q && !filters.type && !filters.author;
-  let where = base(view);
-  const params: Array<string | number> = [];
+  const key = JSON.stringify([filters.q, filters.type, filters.author, ...(sort === 'newest' ? [] : [sort]),
+    ...(scope.folder ? [scope.uploadId, scope.folder] : [])]);
+  const noFilters = !filters.q && !filters.type && !filters.author && !scope.folder;
+  let { where, params } = scopedWhere(view, scope);
   if (filters.q) {
     where += " AND name LIKE ? ESCAPE '\\'";
     params.push(`%${filters.q.replace(/[\\%_]/g, char => `\\${char}`)}%`);
@@ -67,34 +87,32 @@ export async function listFiles(env: Env, cursor: string | null, limit = 30, vie
   const column = sort === 'name' ? 'name COLLATE NOCASE' : date;
   const direction = sort === 'newest' ? 'DESC' : 'ASC';
   const comparison = sort === 'newest' ? '<' : '>';
-  const page = env.DB.prepare(`SELECT * FROM files WHERE ${where}${point ? ` AND (${column}, id) ${comparison} (?, ?)` : ''} ORDER BY ${column} ${direction}, id ${direction} LIMIT ?`)
-    .bind(...params, ...(point ?? []), limit + 1);
-  const [rows, count] = await Promise.all([
-    page.all<FileRow>(), env.DB.prepare(`SELECT COUNT(*) AS total FROM files WHERE ${where}`).bind(...params).first<{ total: number }>(),
-  ]);
-  const files = rows.results.slice(0, limit);
+  const rows = sql.exec<FileRow>(`SELECT * FROM files WHERE ${where}${point ? ` AND (${column}, id) ${comparison} (?, ?)` : ''} ORDER BY ${column} ${direction}, id ${direction} LIMIT ?`,
+    ...params, ...(point ?? []), limit + 1).toArray();
+  const count = sql.exec<{ total: number }>(`SELECT COUNT(*) AS total FROM files WHERE ${where}`, ...params).one();
+  const files = rows.slice(0, limit);
   const last = files.at(-1);
   return {
     files: files.map(row => present(row, env)), total: count?.total ?? 0,
-    nextCursor: rows.results.length > limit && last
+    nextCursor: rows.length > limit && last
       ? encode([view, key, sort === 'name' ? last.name : view === 'trash' ? last.trashed_at : last.created_at, last.id]) : null,
   };
 }
 
-export async function getFileFilters(env: Env, view: FileView = 'files'): Promise<FileFilterOptions> {
-  const where = base(view);
-  const [types, authors] = await Promise.all([
-    env.DB.prepare(`SELECT content_type, COUNT(*) AS count FROM files WHERE ${where} GROUP BY content_type`).all<{ content_type: string; count: number }>(),
-    env.DB.prepare(`SELECT uploader_id, MAX(uploader_label) AS label, COUNT(*) AS count FROM files WHERE ${where} GROUP BY uploader_id ORDER BY label COLLATE NOCASE, uploader_id`).all<{ uploader_id: string; label: string; count: number }>(),
-  ]);
+export function queryFileFilters(sql: SqlStorage, view: FileView = 'files', input: FileScope = {}): FileFilterOptions {
+  const { where, params } = scopedWhere(view, normalizeScope(input));
+  const types = sql.exec<{ content_type: string; count: number }>(
+    `SELECT content_type, COUNT(*) AS count FROM files WHERE ${where} GROUP BY content_type`, ...params).toArray();
+  const authors = sql.exec<{ uploader_id: string; label: string; count: number }>(
+    `SELECT uploader_id, MAX(uploader_label) AS label, COUNT(*) AS count FROM files WHERE ${where} GROUP BY uploader_id ORDER BY label COLLATE NOCASE, uploader_id`, ...params).toArray();
   const grouped = new Map<string, number>();
-  for (const row of types.results) {
+  for (const row of types) {
     const value = row.content_type.startsWith('image/') ? 'image/*' : row.content_type;
     grouped.set(value, (grouped.get(value) ?? 0) + row.count);
   }
   return {
-    total: types.results.reduce((sum, row) => sum + row.count, 0),
+    total: types.reduce((sum, row) => sum + row.count, 0),
     types: [...grouped].map(([value, count]) => ({ value, label: fileTypeLabel(value), count })).sort((a, b) => a.label.localeCompare(b.label, 'en')),
-    authors: authors.results.map(row => ({ value: row.uploader_id, label: row.label, count: row.count })),
+    authors: authors.map(row => ({ value: row.uploader_id, label: row.label, count: row.count })),
   };
 }

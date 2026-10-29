@@ -1,6 +1,6 @@
 import { env, exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { prepareDatabase } from './database';
+import { prepareDatabase, database } from './database';
 import type { FilePage, SharedFile } from '../shared/types';
 import { createUpload, uploadFile } from '../worker/files';
 
@@ -48,6 +48,23 @@ describe('private file service', () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'other@example.test' }),
     });
     expect(response.status).toBe(400);
+  });
+
+  it('accepts external CSS and JavaScript at HTML-relative paths with executable MIME types', async () => {
+    const id = await group();
+    const html = await put(id, 'site/index.html', '<link rel="stylesheet" href="assets/style.css"><script src="assets/app.js"></script>');
+    const file = await html.json() as SharedFile;
+    for (const [path, body, type] of [
+      ['assets/style.css', 'body { color: green; }', 'text/css'],
+      ['assets/app.js', 'document.title = "Loaded";', 'text/javascript'],
+    ]) {
+      expect((await put(id, `site/${path}`, body, type)).status).toBe(201);
+      const response = await exports.default.fetch(new URL(path!, file.url).href);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Content-Type')).toBe(type);
+      expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+      expect(await response.text()).toBe(body);
+    }
   });
 
   it('accepts Markdown and CSV, opens their text in the browser, and keeps original download types', async () => {
@@ -115,7 +132,7 @@ describe('private file service', () => {
       uploadId: id, path: 'large.png', type: 'image/png', size: Number(env.MAX_FILE_BYTES) + 1,
       body: new Uint8Array(), source: 'web',
     })).rejects.toMatchObject({ status: 413 });
-    expect(await env.DB.prepare('SELECT id FROM files WHERE upload_id = ?').bind(id).first()).toBeNull();
+    expect(await database(sql => sql.exec('SELECT id FROM files WHERE upload_id = ?', id).toArray()[0] ?? null)).toBeNull();
   });
 
   it('rejects cross-site uploads and does not expose the API on the content origin', async () => {

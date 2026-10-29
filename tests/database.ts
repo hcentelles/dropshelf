@@ -1,10 +1,15 @@
 import { env } from 'cloudflare:workers';
-import files from '../migrations/0001_files.sql?raw';
-import trash from '../migrations/0002_trash.sql?raw';
-import sorting from '../migrations/0003_file_name_order.sql?raw';
+import { runInDurableObject } from 'cloudflare:test';
+import { shelf } from '../worker/shelf-client';
+
+export function database<T>(callback: (sql: SqlStorage) => T): Promise<T> {
+  return runInDurableObject(shelf(env), (_instance, state) => callback(state.storage.sql));
+}
 
 export async function prepareDatabase(): Promise<void> {
-  for (const migration of [files, trash, sorting]) {
-    await env.DB.batch(migration.split(';').map(sql => sql.trim()).filter(Boolean).map(sql => env.DB.prepare(sql)));
-  }
+  await database(sql => { sql.exec('SELECT version FROM schema_migrations').toArray(); });
+}
+
+export async function resetDatabase(): Promise<void> {
+  await database(sql => { sql.exec('DELETE FROM files; DELETE FROM uploads; DELETE FROM deleted_files;'); });
 }

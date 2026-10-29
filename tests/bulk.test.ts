@@ -1,15 +1,13 @@
 import { env, exports } from 'cloudflare:workers';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { prepareDatabase } from './database';
+import { prepareDatabase, resetDatabase } from './database';
 import { createUpload, getFile, listFiles, uploadFile } from '../worker/files';
-import { getFileFilters } from '../worker/file-query';
+import { getFileFilters } from '../worker/files';
 import { manageFiles } from '../worker/bulk';
 import { trashFile } from '../worker/trash';
 
 beforeAll(prepareDatabase);
-beforeEach(async () => {
-  await env.DB.batch(['DELETE FROM files', 'DELETE FROM uploads', 'DELETE FROM deleted_files'].map(sql => env.DB.prepare(sql)));
-});
+beforeEach(resetDatabase);
 
 const alice = { id: 'author-alice', label: 'alice@example.test', email: 'alice@example.test', kind: 'user' as const };
 const bob = { id: 'author-bob', label: 'bob@example.test', email: 'bob@example.test', kind: 'user' as const };

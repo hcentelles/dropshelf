@@ -1,4 +1,4 @@
-import type { SharedFile } from '../shared/types';
+import type { SharedFile, ShelfEntry } from '../shared/types';
 import { element, icon, toast } from './api';
 import { applyFileAction } from './bulk-actions';
 import { createFileList } from './file-list';
@@ -19,10 +19,11 @@ export function initTrashView(onChange: () => void) {
 
   const list = createFileList({
     prefix: 'trash-', view: 'trash',
-    render: file => fileRow(file, false, { restore: file => restore([file]), deletePermanently: file => showDelete([file]) }),
+    render: file => fileRow(file, false, { restore: file => restore([file]), deletePermanently: file => { void prepareDelete([file]); } }),
     onState: state => {
       allTotal = state.total;
       listBusy = state.busy;
+      deleteAll.hidden = state.inFolder;
       deleteAll.disabled = !allTotal || listBusy || deleting;
     },
   });
@@ -31,8 +32,14 @@ export function initTrashView(onChange: () => void) {
     confirm.replaceChildren(icon('trash'), document.createTextNode(text));
   }
 
-  async function restore(files: SharedFile[]): Promise<void> {
+  async function restore(entries: ShelfEntry[]): Promise<void> {
+    const files = await list.resolveEntries(entries);
     if (files.length) await applyFileAction(list, 'restore', files, onChange);
+  }
+
+  async function prepareDelete(entries: ShelfEntry[]): Promise<void> {
+    const files = await list.resolveEntries(entries);
+    if (files.length) showDelete(files);
   }
 
   function showDelete(files: SharedFile[], all = false): void {
@@ -69,7 +76,7 @@ export function initTrashView(onChange: () => void) {
   }
 
   element('trash-bulk-restore').addEventListener('click', () => { void restore(list.selected()); });
-  element('trash-bulk-delete').addEventListener('click', () => { showDelete(list.selected()); });
+  element('trash-bulk-delete').addEventListener('click', () => { void prepareDelete(list.selected()); });
   deleteAll.addEventListener('click', () => { void prepareDeleteAll(); });
   cancel.addEventListener('click', () => { dialog.close(); });
   dialog.addEventListener('close', () => { targets = []; });

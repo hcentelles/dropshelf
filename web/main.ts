@@ -1,14 +1,15 @@
 import '@fontsource-variable/inter';
 import './style.css';
 import { describeAllowedTypes, formatSize } from '../shared/formats';
-import type { AppConfig, SharedFile } from '../shared/types';
+import type { AppConfig, SharedFile, ShelfEntry } from '../shared/types';
 import { api, element, icon, identityLabel, initials, toast } from './api';
 import { applyFileAction, copyFileLinks } from './bulk-actions';
 import { fileRow } from './file-row';
 import { createFileList } from './file-list';
+import { initLiveUpdates } from './live-updates';
 import { initInteractions } from './interactions';
 import { initMcpSetup, showMcpSetupError, updateMcpSetup } from './mcp-setup';
-import { currentSection, initNavigation } from './navigation';
+import { currentScope, currentSection, initNavigation } from './navigation';
 import { initTrashView } from './trash';
 import { droppedFiles, selectedFiles, uploadFiles, type LocalFile } from './uploads';
 
@@ -52,22 +53,8 @@ function updateRecentCopy(): void {
   copyNew.replaceChildren(icon('copy'), document.createTextNode(`Copy ${recentFiles.length === 1 ? 'link' : `${recentFiles.length} links`}`));
 }
 
-async function moveToTrash(file: SharedFile): Promise<void> {
-  try {
-    await api(`/api/files/${file.id}/trash`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-    });
-    activeFiles.remove(file.id);
-    fresh.delete(file.id);
-    recentFiles = recentFiles.filter(item => item.id !== file.id);
-    updateRecentCopy();
-    trash.invalidate();
-    toast('File moved to Trash.');
-  } catch (error) {
-    toast(error instanceof Error ? error.message : 'The file could not be moved to Trash.');
-    await activeFiles.refresh();
-    trash.invalidate();
-  }
+async function moveToTrash(file: ShelfEntry): Promise<void> {
+  await trashEntries([file]);
 }
 
 async function startUpload(files: LocalFile[]): Promise<void> {
@@ -102,6 +89,7 @@ async function startUpload(files: LocalFile[]): Promise<void> {
     element('upload-progress').hidden = true;
     fileInput.value = '';
     folderInput.value = '';
+    activeFiles.requestLiveUpdate();
   }
 }
 
@@ -111,9 +99,9 @@ fileInput.addEventListener('change', () => { if (fileInput.files) void startUplo
 folderInput.addEventListener('change', () => { if (folderInput.files) void startUpload(selectedFiles(folderInput.files)); });
 element('copy-new').addEventListener('click', () => { void copyFileLinks(recentFiles); });
 element('bulk-copy').addEventListener('click', () => { void copyFileLinks(activeFiles.selected()); });
-element('bulk-trash').addEventListener('click', () => { void trashSelected(); });
-async function trashSelected(): Promise<void> {
-  const files = activeFiles.selected();
+element('bulk-trash').addEventListener('click', () => { void trashEntries(activeFiles.selected()); });
+async function trashEntries(entries: ShelfEntry[]): Promise<void> {
+  const files = await activeFiles.resolveEntries(entries);
   if (!files.length) return;
   const result = await applyFileAction(activeFiles, 'trash', files, () => { trash.invalidate(); });
   const failed = new Set(result.failed.map(item => item.id));
@@ -147,6 +135,9 @@ initMcpSetup();
 initNavigation(section => {
   if (section !== 'trash') trash.leave();
   if (section !== 'files') activeFiles.clearSelection();
+  const scope = currentScope();
+  if (section === 'files') { activeFiles.setScope(scope); dropZone.hidden = !!scope.folder; }
+  if (section === 'trash') trash.setScope(scope);
   if (!config) return;
   if (section === 'files') void activeFiles.ensureFresh();
   if (section === 'trash') void trash.ensureFresh();
@@ -166,6 +157,7 @@ async function boot(): Promise<void> {
     element('upload-limit').textContent = `Up to ${formatSize(config.maxFileBytes)} per file. Folder paths are kept.`;
     updateMcpSetup(config);
     setUploadEnabled(true);
+    initLiveUpdates(() => { activeFiles.requestLiveUpdate(); trash.requestLiveUpdate(); });
     if (currentSection() === 'trash') await trash.ensureFresh();
     else if (currentSection() === 'files') await activeFiles.ensureFresh();
   } catch (error) {

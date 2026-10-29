@@ -1,16 +1,32 @@
 import { fileTypeLabel } from '../shared/formats';
-import type { FileQuery, FileSort, FileFilterOptions, FilePage, FileView, SharedFile } from '../shared/types';
+import type { ExplorerPage, FileScope, FileQuery, FileSort, FileFilterOptions, FilePage, FileView, SharedFile, ShelfEntry } from '../shared/types';
 import { api, element, identityLabel } from './api';
 
-export function fileQuery(view: FileView, filters: FileQuery, cursor?: string | null, limit?: number): string {
+export function fileQuery(view: FileView, filters: FileQuery, cursor?: string | null, limit?: number, explorer = false): string {
   const query = new URLSearchParams({ view });
   if (filters.q) query.set('q', filters.q);
   if (filters.type) query.set('type', filters.type);
   if (filters.author) query.set('author', filters.author);
   if (filters.sort) query.set('sort', filters.sort);
+  if (filters.uploadId) query.set('uploadId', filters.uploadId);
+  if (filters.folder) query.set('folder', filters.folder);
   if (cursor) query.set('cursor', cursor);
   if (limit) query.set('limit', String(limit));
-  return `/api/files?${query}`;
+  return `/api/${explorer ? 'explorer' : 'files'}?${query}`;
+}
+
+export async function collectEntries(view: FileView, filters: FileQuery, signal?: AbortSignal): Promise<ShelfEntry[]> {
+  const entries = new Map<string, ShelfEntry>();
+  const cursors = new Set<string>();
+  let cursor: string | null = null;
+  do {
+    const page: ExplorerPage = await api(fileQuery(view, filters, cursor, 100, true), { signal });
+    for (const entry of page.entries) entries.set(entry.id, entry);
+    cursor = page.nextCursor;
+    if (cursor && cursors.has(cursor)) throw new Error('The folder list did not advance. Try again.');
+    if (cursor) cursors.add(cursor);
+  } while (cursor);
+  return [...entries.values()];
 }
 
 export async function collectFiles(view: FileView, filters: FileQuery, signal?: AbortSignal): Promise<SharedFile[]> {
@@ -27,7 +43,8 @@ export async function collectFiles(view: FileView, filters: FileQuery, signal?: 
   return [...files.values()];
 }
 
-export function initFileSearch(prefix: string, view: FileView, changed: (fetch: boolean) => void, onTotal?: (total: number) => void) {
+export function initFileSearch(prefix: string, view: FileView, changed: (fetch: boolean) => void, onTotal?: (total: number) => void,
+  scope: () => FileScope = () => ({})) {
   const q = element<HTMLInputElement>(`${prefix}search`);
   const type = element<HTMLSelectElement>(`${prefix}filter-type`);
   const author = element<HTMLSelectElement>(`${prefix}filter-author`);
@@ -40,7 +57,7 @@ export function initFileSearch(prefix: string, view: FileView, changed: (fetch: 
   let revision = 0;
   let total = 0;
 
-  const values = (): FileQuery => ({ q: q.value.trim().normalize('NFC'), type: type.value, author: author.value, sort: sort.value as FileSort });
+  const values = (): FileQuery => ({ ...scope(), q: q.value.trim().normalize('NFC'), type: type.value, author: author.value, sort: sort.value as FileSort });
   const active = () => !!(q.value.trim() || type.value || author.value);
   function change(debounce: boolean): void {
     clearTimeout(timer);
@@ -68,7 +85,7 @@ export function initFileSearch(prefix: string, view: FileView, changed: (fetch: 
     fetching = true;
     const started = revision;
     try {
-      const result = await api<FileFilterOptions>(`/api/files/filters?view=${view}`);
+      const result = await api<FileFilterOptions>(fileQuery(view, scope()).replace('/api/files?', '/api/files/filters?'));
       if (started !== revision) return;
       const authors = result.authors.map(entry => ({ ...entry, label: identityLabel(entry.label) }));
       for (const entry of authors) labels.set(entry.value, entry.label);
@@ -86,6 +103,7 @@ export function initFileSearch(prefix: string, view: FileView, changed: (fetch: 
 
   return {
     values, active, refresh,
+    reset(): void { clearTimeout(timer); q.value = ''; type.value = ''; author.value = ''; clear.hidden = true; dirty = true; revision++; },
     invalidate: () => { dirty = true; revision++; },
     get total() { return total; },
     lock(locked: boolean): void { q.disabled = locked; type.disabled = locked; author.disabled = locked; sort.disabled = locked; clear.disabled = locked; },

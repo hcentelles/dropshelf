@@ -238,6 +238,14 @@ tr.is-selected { background: var(--accent-bg); }
 .button .ph, .menu-panel .ph, .file-menu .menu-panel .ph { font-size: 18px; }
 .button.danger-outline { color: var(--danger); border-color: var(--danger-border); }
 .empty-state .button { margin-top: 15px; }
+.breadcrumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-bottom: 12px; color: var(--muted); font-size: 13px; }
+.breadcrumbs a, .breadcrumbs [aria-current] { display: inline-flex; align-items: center; min-height: 44px; padding: 4px; overflow-wrap: anywhere; }
+.breadcrumbs a { color: var(--accent); }
+.breadcrumbs [aria-current] { color: var(--text); font-weight: 550; }
+.folder-preview { color: var(--accent); background: var(--accent-bg); border-color: var(--accent-border); }
+.file-title > .ph-caret-right { flex-shrink: 0; color: var(--muted); font-size: 12px; }
+.list-heading > div { min-width: 0; }
+.list-heading h2 { overflow-wrap: anywhere; }
 #copy-links-text { resize: vertical; width: 100%; padding: 10px; margin-top: 15px; border: 1px solid var(--border-strong); border-radius: 5px; font-size: 12px; }
 @media (max-width: 1150px) {
   .col-link { display: none; }

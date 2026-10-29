@@ -2,14 +2,12 @@
   "name": "dropshelf-demo",
   "appName": "Drop Shelf",
   "accountId": "replace-with-your-cloudflare-account-id",
-  "databaseName": "dropshelf-demo",
-  "databaseId": "replace-with-your-d1-database-id",
   "bucket": "dropshelf-demo-files",
   "appOrigin": "https://dropshelf-demo.your-subdomain.workers.dev",
   "contentOrigin": "https://dropshelf-demo-content.your-subdomain.workers.dev",
   "accessTeamDomain": "your-team.cloudflareaccess.com",
   "accessAud": "replace-with-your-access-application-audience",
   "maxFileBytes": 104857600,
-  "allowedFileTypes": "image/*,.html,.htm,.md,.markdown,.csv,.pdf",
+  "allowedFileTypes": "image/*,.html,.htm,.md,.markdown,.csv,.pdf,.css,.js",
   "serviceTokenLabels": {}
 }

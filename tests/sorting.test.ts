@@ -1,13 +1,11 @@
 import { env, exports } from 'cloudflare:workers';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FilePage, FileSort, FileView } from '../shared/types';
-import { listFiles } from '../worker/file-query';
-import { prepareDatabase } from './database';
+import { listFiles } from '../worker/files';
+import { prepareDatabase, resetDatabase, database } from './database';
 
 beforeAll(prepareDatabase);
-beforeEach(async () => {
-  await env.DB.batch(['DELETE FROM files', 'DELETE FROM uploads'].map(sql => env.DB.prepare(sql)));
-});
+beforeEach(resetDatabase);
 
 const id = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
 const records = [
@@ -21,17 +19,19 @@ const records = [
 
 async function seed(view: FileView = 'files'): Promise<void> {
   const uploadId = crypto.randomUUID();
-  await env.DB.prepare('INSERT INTO uploads (id, owner_id, created_at) VALUES (?, ?, ?)').bind(uploadId, 'author', 1).run();
-  await env.DB.batch(records.map((record, index) => {
-    const trashed = view === 'trash';
-    const deleting = trashed && index === 5;
-    return env.DB.prepare(`INSERT INTO files
-      (id, upload_id, path, name, object_key, content_type, size, uploader_id, uploader_email,
-        uploader_label, source, status, created_at, trashed_at, delete_started_at)
-      VALUES (?, ?, ?, ?, ?, 'text/html', 0, 'author', 'author@example.test', 'author@example.test', 'web', ?, ?, ?, ?)`)
-      .bind(id(index + 1), uploadId, record.name, record.name, `${uploadId}/${record.name}`,
-        deleting ? 'deleting' : trashed ? 'trashed' : 'ready', record.created, trashed ? record.trashed : null, deleting ? 500 : null);
-  }));
+  await database(sql => {
+    sql.exec('INSERT INTO uploads (id, owner_id, created_at) VALUES (?, ?, ?)', uploadId, 'author', 1);
+    records.forEach((record, index) => {
+      const trashed = view === 'trash';
+      const deleting = trashed && index === 5;
+      sql.exec(`INSERT INTO files
+        (id, upload_id, path, name, object_key, content_type, size, uploader_id, uploader_email,
+          uploader_label, source, status, created_at, trashed_at, delete_started_at)
+        VALUES (?, ?, ?, ?, ?, 'text/html', 0, 'author', 'author@example.test', 'author@example.test', 'web', ?, ?, ?, ?)`,
+        id(index + 1), uploadId, record.name, record.name, `${uploadId}/${record.name}`,
+          deleting ? 'deleting' : trashed ? 'trashed' : 'ready', record.created, trashed ? record.trashed : null, deleting ? 500 : null);
+    });
+  });
 }
 
 describe.each(['files', 'trash'] as const)('%s sorting', view => {

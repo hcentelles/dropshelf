@@ -15,7 +15,7 @@ Usage:
   npm run setup -- --input /absolute/path/instance.json --out /absolute/path/config
 
 Copy instance.example.json to a private directory and replace its example values.
-Create R2, D1, and an Access application first. See docs/deployment.md.
+Create R2 and an Access application first. See docs/deployment.md.
 `;
 if (args.includes('--help')) { console.log(help); process.exit(0); }
 const inputPath = argument('input');
@@ -50,7 +50,6 @@ try {
   const config = JSON.parse(await readFile(inputPath, 'utf8'));
   const name = requireString(config, 'name', /^[a-z][a-z0-9-]{0,43}$/);
   const accountId = requireString(config, 'accountId', /^[a-f0-9]{32}$/);
-  const databaseId = requireString(config, 'databaseId', /^[a-f0-9-]{36}$/);
   const bucket = requireString(config, 'bucket', /^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/);
   const appOrigin = origin(requireString(config, 'appOrigin'));
   const contentOrigin = origin(requireString(config, 'contentOrigin'));
@@ -82,17 +81,22 @@ try {
       SERVICE_TOKEN_LABELS: JSON.stringify(labels), MAX_FILE_BYTES: String(maxBytes),
       ALLOWED_FILE_TYPES: allowed,
     },
-    d1_databases: [{ binding: 'DB', database_name: config.databaseName ?? name,
-      database_id: databaseId, migrations_dir: resolve(root, 'migrations') }],
     r2_buckets: [{ binding: 'FILES', bucket_name: bucket }],
   };
   for (const [file, workerName] of [['app.jsonc', name], ['content.jsonc', `${name}-content`]]) {
     const path = resolve(outputPath, file);
+    const store = file === 'app.jsonc' ? {
+      durable_objects: { bindings: [{ name: 'SHELF', class_name: 'Shelf' }] },
+      exports: { Shelf: { type: 'durable-object', storage: 'sqlite' } },
+    } : {
+      main: resolve(root, 'worker/content-worker.ts'),
+      durable_objects: { bindings: [{ name: 'SHELF', class_name: 'Shelf', script_name: name }] },
+    };
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-    await writeFile(path, `${JSON.stringify({ ...common, name: workerName }, null, 2)}\n`, { mode: 0o600 });
+    await writeFile(path, `${JSON.stringify({ ...common, ...store, name: workerName }, null, 2)}\n`, { mode: 0o600 });
   }
   console.log(`Instance configuration created in ${resolve(outputPath)}.`);
-  console.log('The two Workers share R2 and D1. Access must protect both hostnames.');
+  console.log('The two Workers share R2 and one SQLite Durable Object. Access must protect both hostnames.');
 } catch (error) {
   console.error(error instanceof Error ? error.message : 'The configuration could not be created.');
   process.exit(1);

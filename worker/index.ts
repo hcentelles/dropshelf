@@ -2,12 +2,14 @@ import type { AppConfig, FileSort, FileView } from '../shared/types';
 import { authenticate } from './auth';
 import { serveContent } from './content';
 import { createUpload, getFile, listFiles, thumbnail, uploadFile } from './files';
-import { allowedFileTypes, checkBrowserOrigin, HttpError, isLoopback, json, maxFileBytes, origins, readBody, readJson, secureResponse } from './http';
+import { allowedFileTypes, checkBrowserOrigin, HttpError, isHttpError, isLoopback, json, maxFileBytes, origins, readBody, readJson, secureResponse } from './http';
 import { handleMcp, MAX_MCP_BODY } from './mcp';
 import { deleteFilePermanently, restoreFile, trashFile } from './trash';
-import { getFileFilters } from './file-query';
+import { getFileFilters, listExplorer } from './files';
+import { shelf } from './shelf-client';
 import { manageFiles } from './bulk';
 import type { BulkAction } from '../shared/types';
+export { Shelf } from './shelf';
 
 async function route(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
@@ -27,19 +29,27 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   }
   if (url.pathname.startsWith('/api/')) {
     checkBrowserOrigin(request, app.origin);
+    if (url.pathname === '/api/updates' && request.method === 'GET') {
+      return shelf(env).fetch(new Request('https://updates.internal/', {
+        headers: { Upgrade: request.headers.get('Upgrade') ?? '' },
+      }));
+    }
     if (url.pathname === '/api/config' && request.method === 'GET') {
       return json({ name: env.APP_NAME, user, maxFileBytes: maxFileBytes(env), allowedFileTypes: allowedFileTypes(env),
         mcpUrl: `${app.origin}/mcp`, local: isLoopback(url.hostname) } satisfies AppConfig);
     }
-    if (url.pathname === '/api/files' && request.method === 'GET') {
-      return json(await listFiles(env, url.searchParams.get('cursor'),
+    if ((url.pathname === '/api/files' || url.pathname === '/api/explorer') && request.method === 'GET') {
+      const list = url.pathname === '/api/explorer' ? listExplorer : listFiles;
+      return json(await list(env, url.searchParams.get('cursor'),
         url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : undefined,
         (url.searchParams.get('view') ?? 'files') as FileView,
         { q: url.searchParams.get('q') ?? '', type: url.searchParams.get('type') ?? '', author: url.searchParams.get('author') ?? '',
-          sort: (url.searchParams.get('sort') ?? 'newest') as FileSort }));
+          sort: (url.searchParams.get('sort') ?? 'newest') as FileSort,
+          uploadId: url.searchParams.get('uploadId') ?? '', folder: url.searchParams.get('folder') ?? '' }));
     }
     if (url.pathname === '/api/files/filters' && request.method === 'GET') {
-      return json(await getFileFilters(env, (url.searchParams.get('view') ?? 'files') as FileView));
+      return json(await getFileFilters(env, (url.searchParams.get('view') ?? 'files') as FileView,
+        { uploadId: url.searchParams.get('uploadId') ?? '', folder: url.searchParams.get('folder') ?? '' }));
     }
     if (url.pathname === '/api/files/bulk' && request.method === 'POST') {
       const payload = await readJson(request);
@@ -97,7 +107,8 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   if (url.pathname === '/' || url.pathname.startsWith('/assets/')) {
     const response = await env.ASSETS.fetch(request);
     const headers = new Headers(response.headers);
-    headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+    const socketOrigin = `${app.protocol === 'https:' ? 'wss:' : 'ws:'}//${app.host}`;
+    headers.set('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self' ${socketOrigin}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
     headers.set('X-Frame-Options', 'DENY');
     return new Response(response.body, { status: response.status, headers });
   }
@@ -108,7 +119,7 @@ export default {
   async fetch(request, env, ctx) {
     try { return secureResponse(await route(request, env, ctx)); }
     catch (error) {
-      if (error instanceof HttpError) return secureResponse(json({ error: error.message }, error.status));
+      if (isHttpError(error)) return secureResponse(json({ error: error.message }, error.status));
       console.error(JSON.stringify({ event: 'request_failed', path: new URL(request.url).pathname,
         message: error instanceof Error ? error.message : 'Unknown error' }));
       return secureResponse(json({ error: 'The request failed. Try again.' }, 500));

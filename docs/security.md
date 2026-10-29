@@ -4,7 +4,7 @@
 
 Any identity approved by Access can move, restore, or permanently delete team files. The Worker records who moved a file to Trash from the verified identity. Files in Trash do not serve content, downloads, or thumbnails. No R2 object is removed by the move or restore action.
 
-Permanent deletion requires a file already in Trash and an explicit `confirm: true` request. A deletion state blocks concurrent restore before bytes are removed. R2 deletion happens before transactional D1 cleanup. If either service fails, the operation can be retried without restoring a file whose bytes may be gone. Only a file ID and object-path hash remain after completion, so a delayed retry cannot remove a replacement file.
+Permanent deletion requires a file already in Trash and an explicit `confirm: true` request. A deletion state blocks concurrent restore before bytes are removed. R2 deletion happens before transactional DO SQLite cleanup. If either service fails, the operation can be retried without restoring a file whose bytes may be gone. Only a file ID and object-path hash remain after completion, so a delayed retry cannot remove a replacement file.
 
 ## Identity and access
 
@@ -12,7 +12,7 @@ Cloudflare Access protects both instance hostnames. The Worker independently val
 
 Upload groups belong to the verified user or service. One user cannot add a file to another user's upload group. Every file stores the identity used at upload time. An email is a historical record; changing an Access policy does not rewrite old uploader records.
 
-All approved identities can list and read all ready files within an instance. Use separate instances for teams that must not share data. Each instance needs separate R2, D1, and Access resources.
+All approved identities can list and read all ready files within an instance. Use separate instances for teams that must not share data. Each instance needs separate R2, Durable Object, and Access resources.
 
 The deployment guide uses a 14-day browser session, a 15-minute MCP access token, and a 14-day OAuth refresh grant. Cloudflare Access manages all three. Daily use does not remove the grant's time limit. A client can refresh only while its grant remains valid and its identity passes Access policy checks. See [session and renewal setup](mcp.md#session-duration-and-renewal).
 
@@ -37,6 +37,10 @@ Browser API and MCP requests with a foreign Origin are rejected. Non-browser MCP
 File paths must be relative. Empty parts, traversal parts, control characters, and backslashes are rejected. R2 keys include a random upload ID. A database uniqueness constraint reserves each path before R2 is written, so a concurrent request cannot overwrite an existing file in that upload group.
 
 R2 stays private. The browser and MCP receive Worker URLs, not public bucket URLs or storage credentials. The file list contains only records whose object write and database update completed. Failed writes are removed where possible and remain invisible otherwise.
+
+The app authenticates a WebSocket connection before passing it to the Durable Object. Foreign browser origins are rejected. The socket sends only change notices, with no file names or identity data. Each subsequent data request requires normal Access authentication. Client messages cannot broadcast changes; only the heartbeat is accepted. The object uses hibernation so idle connections do not keep its JavaScript running.
+
+File bytes stream between the Worker and R2. The Durable Object holds metadata and serializes its SQLite writes. Failed upload cleanup keeps the path reserved until R2 cleanup ends. A lost completion response cannot remove bytes from a completed upload.
 
 ## Local development
 

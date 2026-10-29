@@ -27,7 +27,7 @@ export function fileType(path: string, declaredType = ''): string {
   return /^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/.test(mime) ? mime : 'application/octet-stream';
 }
 
-export const DEFAULT_ALLOWED_FILE_TYPES = 'image/*,.html,.htm,.md,.markdown,.csv,.pdf';
+export const DEFAULT_ALLOWED_FILE_TYPES = 'image/*,.html,.htm,.md,.markdown,.csv,.pdf,.css,.js';
 
 export function parseAllowedFileTypes(value: string): string[] {
   if (typeof value !== 'string' || value.length > 2048) throw new Error('The file type setting is not valid.');
@@ -50,6 +50,7 @@ export function describeAllowedTypes(allowed: string[]): string {
     'image/*': 'Images', '.html': 'HTML', '.htm': 'HTML', 'text/html': 'HTML',
     '.md': 'Markdown', '.markdown': 'Markdown', 'text/markdown': 'Markdown',
     '.csv': 'CSV', 'text/csv': 'CSV',
+    '.css': 'CSS', 'text/css': 'CSS', '.js': 'JavaScript', 'text/javascript': 'JavaScript',
     '.pdf': 'PDF', 'application/pdf': 'PDF',
   };
   const labels = [...new Set(allowed.map(pattern => names[pattern] ?? pattern))];

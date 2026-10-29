@@ -1,6 +1,7 @@
 import { canPreview, formatSize } from '../shared/formats';
-import type { SharedFile } from '../shared/types';
+import { isFolder, type ShelfEntry } from '../shared/types';
 import { copy, icon, identityLabel, initials } from './api';
+import { entryUrl } from './navigation';
 
 function text(tag: string, value: string, className = ''): HTMLElement {
   const node = document.createElement(tag);
@@ -9,24 +10,26 @@ function text(tag: string, value: string, className = ''): HTMLElement {
   return node;
 }
 
-function link(label: string, url: string, className = ''): HTMLAnchorElement {
+function link(label: string, url: string, className = '', newTab = true): HTMLAnchorElement {
   const node = document.createElement('a');
   node.textContent = label;
   node.href = url;
-  node.target = '_blank';
+  if (newTab) node.target = '_blank';
   node.rel = 'noopener noreferrer';
   node.className = className;
   return node;
 }
 
 interface FileActions {
-  trash?: (file: SharedFile) => Promise<void>;
-  restore?: (file: SharedFile) => Promise<void>;
-  deletePermanently?: (file: SharedFile) => void;
+  trash?: (file: ShelfEntry) => Promise<void>;
+  restore?: (file: ShelfEntry) => Promise<void>;
+  deletePermanently?: (file: ShelfEntry) => void;
 }
 
-export function fileRow(file: SharedFile, fresh: boolean, callbacks: FileActions): HTMLTableRowElement {
+export function fileRow(file: ShelfEntry, fresh: boolean, callbacks: FileActions): HTMLTableRowElement {
+  const folder = isFolder(file);
   const inTrash = file.trashedAt !== null;
+  const url = entryUrl(file, inTrash ? 'trash' : 'files');
   const row = document.createElement('tr');
   row.setAttribute('role', 'row');
   row.dataset.fileId = file.id;
@@ -34,26 +37,28 @@ export function fileRow(file: SharedFile, fresh: boolean, callbacks: FileActions
   const nameCell = document.createElement('td');
   nameCell.className = 'col-name';
   const nameWrap = text('div', '', 'file-name-wrap');
-  const isImage = file.contentType.startsWith('image/');
-  const preview = text('div', '', `file-preview ${file.contentType === 'text/html' ? 'html-preview' : !isImage ? 'document-preview' : ''}`);
-  if (!inTrash && canPreview(file.contentType) && file.contentType !== 'image/svg+xml') {
+  const isImage = !folder && file.contentType.startsWith('image/');
+  const preview = text('div', '', `file-preview ${folder ? 'folder-preview' : file.contentType === 'text/html' ? 'html-preview' : !isImage ? 'document-preview' : ''}`);
+  if (!folder && !inTrash && canPreview(file.contentType) && file.contentType !== 'image/svg+xml') {
     const img = document.createElement('img');
     img.src = `/api/files/${file.id}/thumbnail`;
     img.alt = '';
     img.loading = 'lazy';
     img.addEventListener('error', () => { img.remove(); preview.append(icon('image')); }, { once: true });
     preview.append(img);
-  } else { preview.append(icon(file.contentType === 'text/html' ? 'file-code' : isImage ? 'image' : file.contentType === 'text/csv' ? 'table' : file.contentType === 'application/pdf' ? 'file-pdf' : 'file-text')); }
+  } else { preview.append(icon(folder ? 'folder' : file.contentType === 'text/html' ? 'file-code' : isImage ? 'image' : file.contentType === 'text/csv' ? 'table' : file.contentType === 'application/pdf' ? 'file-pdf' : 'file-text')); }
   const details = text('div', '', 'file-details');
   const title = text('div', '', 'file-title');
-  title.append(inTrash ? text('span', file.name, 'file-name') : link(file.name, file.url));
+  title.append(inTrash && !folder ? text('span', file.name, 'file-name') : link(file.name, url, '', !folder));
+  if (folder) title.append(icon('caret-right'));
   if (file.deletionPending) {
     const pending = text('span', 'Delete pending', 'pending-badge');
     pending.title = 'Permanent deletion has started. Use Retry permanent delete to finish.';
     title.append(pending);
   }
   if (fresh) title.append(text('span', 'New', 'new-badge'));
-  const type = file.contentType === 'text/html' ? 'HTML' : (file.name.split('.').at(-1) ?? 'Image').toUpperCase();
+  const type = folder ? `${file.fileCount} ${file.fileCount === 1 ? 'file' : 'files'}`
+    : file.contentType === 'text/html' ? 'HTML' : (file.name.split('.').at(-1) ?? 'Image').toUpperCase();
   const dateValue = file.trashedAt ?? file.createdAt;
   const uploaderName = identityLabel(file.uploaderLabel);
   const mobileMeta = text('div', `${uploaderName} · ${new Date(dateValue).toLocaleDateString('en')}`, 'mobile-meta');
@@ -76,9 +81,9 @@ export function fileRow(file: SharedFile, fresh: boolean, callbacks: FileActions
     actor.title = actor.textContent ?? '';
     linkCell.append(actor);
   } else {
-    const fileLink = link(`…/${file.path}`, file.url, 'file-link');
-    fileLink.title = file.url;
-    fileLink.append(icon('arrow-square-out'));
+    const fileLink = link(`…/${file.path}`, url, 'file-link', !folder);
+    fileLink.title = url;
+    fileLink.append(icon(folder ? 'folder-open' : 'arrow-square-out'));
     linkCell.append(fileLink);
   }
   const date = document.createElement('td');
@@ -95,11 +100,11 @@ export function fileRow(file: SharedFile, fresh: boolean, callbacks: FileActions
   copyButton.className = 'copy-button';
   copyButton.append(icon(inTrash ? 'arrow-counter-clockwise' : 'copy'), text('span', inTrash ? 'Restore' : 'Copy link'));
   copyButton.setAttribute('aria-label', inTrash ? `Restore ${file.name}` : `Copy link for ${file.name}`);
-  copyButton.disabled = file.deletionPending;
-  if (file.deletionPending) copyButton.title = 'Permanent deletion has started. This file cannot be restored.';
+  copyButton.disabled = !folder && file.deletionPending;
+  if (!folder && file.deletionPending) copyButton.title = 'Permanent deletion has started. This file cannot be restored.';
   copyButton.addEventListener('click', () => {
     if (inTrash && callbacks.restore) void run(callbacks.restore);
-    else void copy(file.url, 'Link copied.', undefined, copyButton);
+    else void copy(url, 'Link copied.', undefined, copyButton);
   });
   const menu = document.createElement('details');
   menu.className = 'file-menu';
@@ -116,12 +121,15 @@ export function fileRow(file: SharedFile, fresh: boolean, callbacks: FileActions
     if (inTrash) callbacks.deletePermanently?.(file);
     else if (callbacks.trash) void run(callbacks.trash);
   });
-  if (!inTrash) {
-    const open = link('Open file', file.url);
-    open.prepend(icon('arrow-square-out'));
+  if (!inTrash || folder) {
+    const open = link(folder ? 'Open folder' : 'Open file', url, '', !folder);
+    open.prepend(icon(folder ? 'folder-open' : 'arrow-square-out'));
+    panel.append(open);
+  }
+  if (!inTrash && !folder) {
     const download = link('Download file', file.downloadUrl);
     download.prepend(icon('download-simple'));
-    panel.append(open, download);
+    panel.append(download);
   }
   panel.append(remove);
   menu.append(summary, panel);
@@ -131,7 +139,7 @@ export function fileRow(file: SharedFile, fresh: boolean, callbacks: FileActions
   for (const cell of row.cells) cell.setAttribute('role', 'cell');
   return row;
 
-  async function run(action: (file: SharedFile) => Promise<void>): Promise<void> {
+  async function run(action: (file: ShelfEntry) => Promise<void>): Promise<void> {
     const buttons = [...row.querySelectorAll('button')].map(button => ({ button, disabled: button.disabled }));
     for (const { button } of buttons) button.disabled = true;
     row.setAttribute('aria-busy', 'true');

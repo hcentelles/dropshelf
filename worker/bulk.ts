@@ -1,5 +1,5 @@
 import { MAX_BULK_FILES, type BulkAction, type BulkResult, type Principal } from '../shared/types';
-import { HttpError } from './http';
+import { HttpError, isHttpError } from './http';
 import { deleteFilePermanently, restoreFile, trashFile } from './trash';
 
 export async function manageFiles(env: Env, user: Principal, action: BulkAction, ids: string[], confirm = false): Promise<BulkResult> {
@@ -20,8 +20,8 @@ export async function manageFiles(env: Env, user: Principal, action: BulkAction,
         else await deleteFilePermanently(env, id, true);
         results[index] = { id, ok: true };
       } catch (error) {
-        results[index] = { id, ok: false, status: error instanceof HttpError ? error.status : 500,
-          error: error instanceof HttpError ? error.message : 'The operation failed. Try again.' };
+        results[index] = { id, ok: false, status: isHttpError(error) ? error.status : 500,
+          error: isHttpError(error) ? error.message : 'The operation failed. Try again.' };
       }
     }
   };

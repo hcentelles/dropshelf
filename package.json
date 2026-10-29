@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A private file shelf for teams, built on Cloudflare Workers, R2, D1, and Access.",
+  "description": "A private file shelf for teams, built on Cloudflare Workers, R2, Durable Objects, and Access.",
   "scripts": {
     "dev": "wrangler dev --local",
     "build": "vite build",
@@ -11,7 +11,6 @@
     "typecheck": "tsc -p tsconfig.worker.json && tsc -p tsconfig.web.json",
     "test": "vitest run",
     "check": "npm run typecheck && npm run build && npm test",
-    "db:local": "wrangler d1 migrations apply DB --local",
     "deploy": "npm run build && wrangler deploy",
     "setup": "node scripts/setup.mjs"
   },

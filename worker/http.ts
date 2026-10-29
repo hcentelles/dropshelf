@@ -1,7 +1,12 @@
 import { parseAllowedFileTypes } from '../shared/formats';
 
 export class HttpError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(public status: number, message: string) { super(message); this.name = 'HttpError'; }
+}
+
+export function isHttpError(error: unknown): error is HttpError {
+  return error instanceof Error && error.name === 'HttpError' && 'status' in error &&
+    typeof error.status === 'number' && Number.isInteger(error.status) && error.status >= 400 && error.status <= 599;
 }
 
 export function json(value: unknown, status = 200): Response {
@@ -90,12 +95,13 @@ export async function readJson(request: Request, limit = 16 * 1024): Promise<unk
   }
   try { return JSON.parse(new TextDecoder().decode(await readBody(request, limit))); }
   catch (error) {
-    if (error instanceof HttpError) throw error;
+    if (isHttpError(error)) throw error;
     throw new HttpError(400, 'The JSON body is not valid.');
   }
 }
 
 export function secureResponse(response: Response): Response {
+  if (response.webSocket) return response;
   const headers = new Headers(response.headers);
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Referrer-Policy', 'no-referrer');

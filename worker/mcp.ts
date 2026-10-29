@@ -4,9 +4,9 @@ import { z } from 'zod';
 import { describeAllowedTypes } from '../shared/formats';
 import { MAX_BULK_FILES, type Principal } from '../shared/types';
 import { createUpload, getFile, listFiles, uploadFile } from './files';
-import { allowedFileTypes, HttpError } from './http';
+import { allowedFileTypes, HttpError, isHttpError } from './http';
 import { deleteFilePermanently, restoreFile, trashFile } from './trash';
-import { getFileFilters } from './file-query';
+import { getFileFilters } from './files';
 import { manageFiles } from './bulk';
 
 export const MAX_MCP_BODY = 8 * 1024 * 1024;
@@ -21,7 +21,7 @@ export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, use
         return { content: [{ type: 'text' as const, text: JSON.stringify(value) }] };
       } catch (error) {
         return { isError: true, content: [{ type: 'text' as const,
-          text: error instanceof HttpError ? error.message : 'The operation failed. Try again.' }] };
+          text: isHttpError(error) ? error.message : 'The operation failed. Try again.' }] };
       }
     };
     server.registerTool('whoami', {

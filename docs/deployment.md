@@ -35,14 +35,13 @@ You can find your Workers subdomain in the account dashboard. The Worker names m
 
 ## 3. Create storage
 
-Enable R2 in the target account if needed. Use Standard storage and keep public access disabled. Then create the resources:
+Enable R2 in the target account if needed. Use Standard storage and keep public access disabled. Then create the bucket:
 
 ```sh
 CLOUDFLARE_ACCOUNT_ID=YOUR_ACCOUNT_ID npx wrangler r2 bucket create dropshelf-demo-files --profile shelf-demo
-CLOUDFLARE_ACCOUNT_ID=YOUR_ACCOUNT_ID npx wrangler d1 create dropshelf-demo --profile shelf-demo
 ```
 
-Record the D1 database UUID. The bucket has no public domain and needs no S3 credentials. Workers use native bindings.
+The first app deployment creates the SQLite Durable Object namespace. Its schema is created when the object first starts. The bucket has no public domain and needs no S3 credentials. Workers use native bindings.
 
 ## 4. Configure Cloudflare Access
 
@@ -77,7 +76,7 @@ mkdir -p "$HOME/.config/dropshelf/demo"
 cp instance.example.json "$HOME/.config/dropshelf/demo/instance.json"
 ```
 
-Edit that copied file. Set the account ID, D1 UUID, bucket, exact app and content origins, Access team domain, and AUD tag. Change `appName` to set the name shown in the UI. Set `allowedFileTypes` to the allowed extensions and MIME types, such as `image/*,.html,.htm,.md,.markdown,.csv,.pdf`. This becomes the `ALLOWED_FILE_TYPES` Worker variable. The two Worker names are `name` and `name-content`.
+Edit that copied file. Set the account ID, bucket, exact app and content origins, Access team domain, and AUD tag. Change `appName` to set the name shown in the UI. Set `allowedFileTypes` to the allowed extensions and MIME types, such as `image/*,.html,.htm,.md,.markdown,.csv,.pdf,.css,.js`. This becomes the `ALLOWED_FILE_TYPES` Worker variable. The two Worker names are `name` and `name-content`.
 
 Generate deployment files:
 
@@ -85,18 +84,17 @@ Generate deployment files:
 npm run setup -- --input "$HOME/.config/dropshelf/demo/instance.json" --out "$HOME/.config/dropshelf/demo"
 ```
 
-This creates `app.jsonc` and `content.jsonc`. Both point to the local source, built assets, and migrations. They contain deployment settings, and they stay outside Git. They clear the local test identity and disable Worker preview URLs.
+This creates `app.jsonc` and `content.jsonc`. Both point to the local source and built assets. The app configuration defines the SQLite Durable Object. The content configuration binds to that object in the app Worker. They contain deployment settings, and they stay outside Git. They clear the local test identity and disable Worker preview URLs.
 
-## 6. Apply the schema and deploy
+## 6. Deploy
 
 ```sh
-npx wrangler d1 migrations apply DB --remote --config "$HOME/.config/dropshelf/demo/app.jsonc" --profile shelf-demo
 npm run check
 npx wrangler deploy --config "$HOME/.config/dropshelf/demo/app.jsonc" --profile shelf-demo
 npx wrangler deploy --config "$HOME/.config/dropshelf/demo/content.jsonc" --profile shelf-demo
 ```
 
-The Workers share storage and the file service. The app origin serves the UI, API, and MCP. The content origin serves only uploaded files. Access protects both.
+Deploy the app first so its Durable Object namespace exists before the content Worker is deployed. The Workers share storage and the file service. The app origin serves the UI, API, and MCP. The content origin serves only uploaded files. Access protects both.
 
 If Access does not show a login page on a `workers.dev` address, review that Worker's **Settings → Domains & Routes → Cloudflare Access** and the Access application hostname list. Do not relax the Worker token check to work around a routing error.
 
@@ -105,16 +103,17 @@ If Access does not show a login page on a `workers.dev` address, review that Wor
 Check the complete flow before you invite the team:
 
 1. In a browser without a session, open the app and a copied file URL. Both must require Access login.
-2. Sign in with an approved email code. The app header must show that email.
+2. Sign in with an approved email code. The app header must show the email handle.
 3. Drop HTML, an image, and an unsupported file. Check the accepted and skipped counts.
 4. Open the HTML and image links. Check the uploader and date in the list.
-5. Upload a folder with `index.html` and a relative image. Open the HTML and verify the image.
+5. Upload a folder with `index.html`, a relative image, CSS, and JavaScript. Open each folder level. Open the HTML and verify its assets and script.
 6. Copy one link and the links from a completed upload.
 7. Check newest, oldest, and name sorting in Files and Trash. Load more files and verify that pages do not repeat or skip entries.
-8. Connect your MCP client using OAuth. Call `whoami`, upload a file, and verify the same email in the browser list.
+8. Connect your MCP client using OAuth. Call `whoami`, upload a file, and verify the same handle in the browser list.
 9. Confirm that an unapproved email cannot pass the Access policy.
 10. Confirm that the content hostname returns no UI, file list, or MCP tools.
-11. In each chat client, repeat a live `whoami` call at least 16 minutes after the initial OAuth connection. Do not reconnect between calls. Check the tool result, not only the model's answer. See the [renewal test](mcp.md#test-renewal-in-a-chat-client).
+11. Open two app pages. Add a file through the browser and MCP. Check that both pages update. Move, restore, and delete a test file, then check the other page without a refresh. Disconnect and reconnect the network, and check that the page recovers.
+12. In each chat client, repeat a live `whoami` call at least 16 minutes after the initial OAuth connection. Do not reconnect between calls. Check the tool result, not only the model's answer. See the [renewal test](mcp.md#test-renewal-in-a-chat-client).
 
 A plain HTTP check is useful for the OAuth challenge:
 
@@ -132,18 +131,18 @@ The generated configuration keeps `workers.dev` enabled. The Worker rejects any 
 
 ## Updates and operations
 
-Keep the same R2 bucket and D1 database when you deploy a new code version. Apply new migrations before a version that needs them. Generate configuration again if you move the checkout, because its source paths are absolute.
+Keep the same R2 bucket, app Worker name, Durable Object class (`Shelf`), and object name (`default`) when you deploy a new code version. The object name is fixed so a hostname change does not create an empty shelf. Schema changes belong in the versioned initialization in `worker/schema.ts`; they run in a synchronous SQLite transaction. Generate configuration again if you move the checkout, because its source paths are absolute.
 
-The Trash migration copies existing file records into a table with explicit Trash and deletion states. Back up D1 before applying it. Deploy the content Worker before the app Worker for this update, so both readers are ready before the new controls are available. Verify that the existing file count and links are preserved.
+This version replaces the earlier D1 file index with an empty Durable Object index. It does not copy old records or delete old D1 and R2 resources. Old links are not served through the new index. Use this direct upgrade only for disposable test data; an instance with needed data requires a separate record migration.
 
 Check file name search, type and author filters, and selection across pages. Check that **Delete all** shows the full Trash count when filters hide files. Do not confirm this action against files you need.
 
 Test the full Trash flow with a disposable sample file: move it to Trash, check that its content URL returns `404`, restore it and check the same URL, then confirm permanent deletion from Trash. The last step removes the sample's stored bytes.
 
-Use D1 Time Travel and exports for database recovery. Use R2 retention or a separate object backup if your team needs recoverable file copies. A D1 backup alone does not contain file bytes.
+Use Durable Object SQLite point-in-time recovery for metadata recovery. See [Cloudflare storage recovery](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/#point-in-time-recovery-api). Keep a separate R2 backup if your team needs recoverable file copies. A metadata backup alone does not contain file bytes. Recovery must keep the metadata and R2 contents consistent.
 
 A request that ends before upload completion can leave an invisible `uploading` record or an orphan R2 object. Ready file records are the file list's source of truth. Investigate old incomplete records before you remove them; do not delete objects linked to ready records.
 
-Trash has no automatic retention job. If permanent deletion starts but R2 or D1 fails, the file stays in a pending state in Trash and cannot be restored. Retry permanent deletion to finish it. Do not clear that state manually: the stored bytes may already be gone. A D1 backup cannot restore bytes removed from R2.
+Trash has no automatic retention job. If permanent deletion starts but R2 or the metadata update fails, the file stays in a pending state in Trash and cannot be restored. Retry permanent deletion to finish it. Do not clear that state manually: the stored bytes may already be gone. A metadata backup cannot restore bytes removed from R2.
 
 To end an instance, first remove team access. Export data you need, then remove only that instance's Workers and resources. Shared resources from other instances must stay separate.

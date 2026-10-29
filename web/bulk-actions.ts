@@ -1,10 +1,11 @@
-import { MAX_BULK_FILES, type BulkAction, type BulkResult, type SharedFile } from '../shared/types';
+import { MAX_BULK_FILES, type BulkAction, type BulkResult, type SharedFile, type ShelfEntry } from '../shared/types';
 import { api, copy, element, toast } from './api';
 import type { FileListController } from './file-list';
+import { entryUrl } from './navigation';
 
-export async function copyFileLinks(files: SharedFile[]): Promise<void> {
+export async function copyFileLinks(files: ShelfEntry[]): Promise<void> {
   if (!files.length) return;
-  const links = files.map(file => file.url).join('\n');
+  const links = files.map(file => entryUrl(file)).join('\n');
   if (await copy(links, `${files.length} ${files.length === 1 ? 'link' : 'links'} copied.`, 'Copy failed. Copy the links from the text box.')) return;
   const field = element<HTMLTextAreaElement>('copy-links-text');
   field.value = links;

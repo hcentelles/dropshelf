@@ -10,6 +10,8 @@
     "run_worker_first": true
   },
   "observability": { "enabled": true, "head_sampling_rate": 0.1 },
+  "durable_objects": { "bindings": [{ "name": "SHELF", "class_name": "Shelf" }] },
+  "exports": { "Shelf": { "type": "durable-object", "storage": "sqlite" } },
   "vars": {
     "APP_NAME": "Drop Shelf",
     "APP_ORIGIN": "http://localhost:8787",
@@ -19,13 +21,7 @@
     "SERVICE_TOKEN_LABELS": "{}",
     "LOCAL_DEV_EMAIL": "developer@example.test",
     "MAX_FILE_BYTES": "104857600",
-    "ALLOWED_FILE_TYPES": "image/*,.html,.htm,.md,.markdown,.csv,.pdf"
+    "ALLOWED_FILE_TYPES": "image/*,.html,.htm,.md,.markdown,.csv,.pdf,.css,.js"
   },
-  "d1_databases": [{
-    "binding": "DB",
-    "database_name": "dropshelf-local",
-    "database_id": "00000000-0000-0000-0000-000000000000",
-    "migrations_dir": "./migrations"
-  }],
   "r2_buckets": [{ "binding": "FILES", "bucket_name": "dropshelf-local-files" }]
 }

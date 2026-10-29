@@ -2,7 +2,7 @@ import { env, exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createUpload, getFile, listFiles, uploadFile } from '../worker/files';
 import { deleteFilePermanently, restoreFile, trashFile } from '../worker/trash';
-import { prepareDatabase } from './database';
+import { prepareDatabase, database } from './database';
 
 beforeAll(prepareDatabase);
 
@@ -61,7 +61,7 @@ describe('Trash', () => {
     await trashFile(env, member, file.id);
     await Promise.all([deleteFilePermanently(env, file.id, true), deleteFilePermanently(env, file.id, true)]);
     expect(await env.FILES.head(`${file.uploadId}/${file.path}`)).toBeNull();
-    expect(await env.DB.prepare('SELECT id FROM files WHERE id = ?').bind(file.id).first()).toBeNull();
+    expect(await database(sql => sql.exec('SELECT id FROM files WHERE id = ?', file.id).toArray()[0] ?? null)).toBeNull();
     await expect(getFile(env, file.id)).rejects.toMatchObject({ status: 404 });
     expect((await exports.default.fetch(file.url)).status).toBe(404);
     expect(await deleteFilePermanently(env, file.id, true)).toEqual({ id: file.id, deleted: true });
@@ -86,11 +86,11 @@ describe('Trash', () => {
   it('blocks restore after R2 deletion if the database update fails, then completes on retry', async () => {
     const file = await add();
     await trashFile(env, member, file.id);
-    const failingEnv = { ...env, DB: {
-      prepare: (sql: string) => env.DB.prepare(sql),
-      batch: async () => { throw new Error('D1 test failure'); },
-    } as unknown as D1Database };
-    await expect(deleteFilePermanently(failingEnv, file.id, true)).rejects.toThrow('D1 test failure');
+    await database(sql => { sql.exec(`CREATE TRIGGER fail_metadata_delete BEFORE DELETE ON files
+      BEGIN SELECT RAISE(ABORT, 'Metadata test failure'); END;`); });
+    await expect(deleteFilePermanently(env, file.id, true)).rejects.toThrow('Metadata test failure');
+    await database(sql => { sql.exec('DROP TRIGGER fail_metadata_delete'); });
+    expect(await database(sql => sql.exec('SELECT id FROM deleted_files WHERE id = ?', file.id).toArray())).toEqual([]);
     expect(await env.FILES.head(`${file.uploadId}/${file.path}`)).toBeNull();
     expect((await getFile(env, file.id)).deletionPending).toBe(true);
     await expect(restoreFile(env, file.id)).rejects.toMatchObject({ status: 409 });
@@ -107,7 +107,7 @@ describe('Trash', () => {
         : [restoreFile(env, file.id), deleteFilePermanently(env, file.id, true)];
       const results = await Promise.allSettled(operations);
       expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
-      const row = await env.DB.prepare('SELECT status FROM files WHERE id = ?').bind(file.id).first<{ status: string }>();
+      const row = await database(sql => sql.exec<{ status: string }>('SELECT status FROM files WHERE id = ?', file.id).toArray()[0]);
       const object = await env.FILES.head(`${file.uploadId}/${file.path}`);
       if (row) { expect(row.status).toBe('ready'); expect(object).not.toBeNull(); }
       else expect(object).toBeNull();
@@ -121,7 +121,7 @@ describe('Trash', () => {
     expect(page.nextCursor).not.toBeNull();
     const added = await add();
     await trashFile(env, member, added.id);
-    await env.DB.prepare('UPDATE files SET trashed_at = ? WHERE id = ?').bind(page.files[0]!.trashedAt! + 1000, added.id).run();
+    await database(sql => { sql.exec('UPDATE files SET trashed_at = ? WHERE id = ?', page.files[0]!.trashedAt! + 1000, added.id); });
     const next = await listFiles(env, page.nextCursor, 2, 'trash');
     expect(next.files).toHaveLength(2);
     const seen = new Set(page.files.map(file => file.id));
