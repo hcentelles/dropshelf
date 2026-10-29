@@ -21,6 +21,7 @@ a { color: inherit; text-decoration: none; }
 button:focus-visible, a:focus-visible, summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
 [hidden] { display: none !important; }
 .ph { font-size: 20px; flex-shrink: 0; }
+.ph::before { display: inline-block; }
 .topbar { min-height: calc(72px + env(safe-area-inset-top, 0px)); display: flex; align-items: center; padding: calc(12px + env(safe-area-inset-top, 0px)) max(32px, env(safe-area-inset-right, 0px)) 12px max(32px, env(safe-area-inset-left, 0px)); border-bottom: 1px solid var(--border); gap: 20px; position: sticky; top: 0; z-index: 30; background: var(--page); }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 18px; letter-spacing: -.5px; font-weight: 650; white-space: nowrap; }
 .brand img { flex-shrink: 0; border-radius: 8px; }
@@ -330,7 +331,7 @@ tr.is-selected { background: var(--accent-bg); }
   a:hover { text-decoration: underline; }
   .menu-panel button:hover, .menu-panel a:hover { background: var(--hover); text-decoration: none; }
   .theme-option:hover > span { background: var(--hover); }
-  .button:hover { background: var(--hover); }
+  .button:hover { background: var(--hover); text-decoration: none; }
   .button.primary:hover { background: var(--primary-hover); }
   .button.quiet:hover { background: var(--hover); }
   .icon-button:hover { background: var(--hover); }
