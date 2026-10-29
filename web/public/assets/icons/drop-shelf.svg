@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Drop Shelf — a teal water drop descending into a white shelf on an indigo background">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#233E93"/>
+      <stop offset="1" stop-color="#151F50"/>
+    </linearGradient>
+    <linearGradient id="droplet" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#8EFFE1"/>
+      <stop offset="1" stop-color="#42D8E1"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1024" height="1024" rx="214" fill="url(#background)"/>
+  <path d="M 265 634 V 712 C 265 766 304 805 361 805 H 663 C 720 805 759 766 759 712 V 634" fill="none" stroke="#F5F8FF" stroke-width="68" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 512 219 C 477 276 418 347 383 407 C 354 457 336 498 336 540 C 336 637 414 715 512 715 C 610 715 688 637 688 540 C 688 498 670 457 641 407 C 606 347 547 276 512 219 Z" fill="url(#droplet)"/>
+</svg>

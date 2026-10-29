@@ -9,6 +9,8 @@ A private file shelf for teams. Drop files or folders, then copy links that open
 - Keep folder paths so relative image links work.
 - Sort files and Trash by newest first, oldest first, or name A–Z, with infinite scroll, uploader identity, dates, and copy actions.
 - Search file names and filter by file type or author across the full file history.
+- Choose System, Light, or Dark in the account menu. Save the choice on this device and apply it before the page appears.
+- Use the Drop Shelf icon for browser tabs and installed web apps.
 - Select files across pages. Copy their links, move them to Trash, restore them, or delete them permanently.
 - Open or download each file through a stable, protected URL.
 - Move files to Trash, restore their original links, and delete files permanently from Trash.

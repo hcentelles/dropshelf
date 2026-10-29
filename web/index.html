@@ -3,8 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#1d2e6c" />
     <meta name="description" content="A private file shelf for teams." />
+    <script src="/assets/theme.js"></script>
+    <link rel="stylesheet" href="/assets/theme.css" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32.png" />
+    <link rel="icon" type="image/svg+xml" sizes="any" href="/assets/icons/drop-shelf.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/assets/site.webmanifest" crossorigin="use-credentials" />
     <title>Drop Shelf</title>
   </head>
   <body>
@@ -15,7 +22,17 @@
         <span class="access-label"><i class="ph ph-lock-simple" aria-hidden="true"></i> Team access</span>
         <details class="account-menu">
           <summary><span class="avatar" id="user-avatar">DS</span><span id="user-email">Loading…</span><i class="ph ph-caret-down" aria-hidden="true"></i></summary>
-          <div class="menu-panel"><a href="#trash" data-section="trash"><i class="ph ph-trash" aria-hidden="true"></i> Trash</a><a href="/cdn-cgi/access/logout"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</a></div>
+          <div class="menu-panel">
+            <fieldset class="theme-options" id="theme-options">
+              <legend>Appearance</legend>
+              <div class="theme-choices">
+                <label class="theme-option"><input class="sr-only" type="radio" name="theme" value="system" checked /><span><i class="ph ph-desktop" aria-hidden="true"></i>System</span></label>
+                <label class="theme-option"><input class="sr-only" type="radio" name="theme" value="light" /><span><i class="ph ph-sun" aria-hidden="true"></i>Light</span></label>
+                <label class="theme-option"><input class="sr-only" type="radio" name="theme" value="dark" /><span><i class="ph ph-moon" aria-hidden="true"></i>Dark</span></label>
+              </div>
+            </fieldset>
+            <a href="#trash" data-section="trash"><i class="ph ph-trash" aria-hidden="true"></i> Trash</a><a href="/cdn-cgi/access/logout"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</a>
+          </div>
         </details>
       </div>
     </header>
