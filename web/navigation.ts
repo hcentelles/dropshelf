@@ -17,6 +17,7 @@ export function initNavigation(onSection: (section: Section) => void): void {
 
   function show(focus: boolean): void {
     const section = currentSection();
+    element('current-section').textContent = section === 'trash' ? 'Trash' : section === 'mcp' ? 'Connect MCP' : 'Files';
     if (focus) scroll[previous] = window.scrollY;
     for (const [name, nodes] of Object.entries(sections)) nodes.view.hidden = name !== section;
     for (const menu of document.querySelectorAll<HTMLDetailsElement>('.account-menu[open]')) menu.open = false;

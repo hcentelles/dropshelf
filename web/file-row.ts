@@ -28,6 +28,7 @@ interface FileActions {
 export function fileRow(file: SharedFile, fresh: boolean, callbacks: FileActions): HTMLTableRowElement {
   const inTrash = file.trashedAt !== null;
   const row = document.createElement('tr');
+  row.setAttribute('role', 'row');
   row.dataset.fileId = file.id;
   if (fresh) row.classList.add('is-new');
   const nameCell = document.createElement('td');
@@ -55,6 +56,7 @@ export function fileRow(file: SharedFile, fresh: boolean, callbacks: FileActions
   const type = file.contentType === 'text/html' ? 'HTML' : (file.name.split('.').at(-1) ?? 'Image').toUpperCase();
   const dateValue = file.trashedAt ?? file.createdAt;
   const mobileMeta = text('div', `${file.uploaderLabel} · ${new Date(dateValue).toLocaleDateString('en')}`, 'mobile-meta');
+  mobileMeta.title = mobileMeta.textContent ?? '';
   details.append(title, text('div', `${type} · ${formatSize(file.size)}`, 'file-meta'), mobileMeta);
   details.title = file.path;
   nameWrap.append(preview, details);
@@ -62,6 +64,7 @@ export function fileRow(file: SharedFile, fresh: boolean, callbacks: FileActions
   const uploader = document.createElement('td');
   uploader.className = 'col-author';
   const person = text('div', '', 'person');
+  person.title = file.uploaderLabel;
   person.append(text('span', initials(file.uploaderLabel), 'avatar small'), text('span', file.uploaderLabel, 'person-label'));
   if (file.source === 'mcp') person.append(text('span', 'MCP', 'source-badge'));
   uploader.append(person);
@@ -94,7 +97,8 @@ export function fileRow(file: SharedFile, fresh: boolean, callbacks: FileActions
   copyButton.disabled = file.deletionPending;
   if (file.deletionPending) copyButton.title = 'Permanent deletion has started. This file cannot be restored.';
   copyButton.addEventListener('click', () => {
-    if (inTrash && callbacks.restore) void run(callbacks.restore); else void copy(file.url);
+    if (inTrash && callbacks.restore) void run(callbacks.restore);
+    else void copy(file.url, 'Link copied.', undefined, copyButton);
   });
   const menu = document.createElement('details');
   menu.className = 'file-menu';
@@ -123,6 +127,7 @@ export function fileRow(file: SharedFile, fresh: boolean, callbacks: FileActions
   controls.append(copyButton, menu);
   actions.append(controls);
   row.append(nameCell, uploader, linkCell, date, actions);
+  for (const cell of row.cells) cell.setAttribute('role', 'cell');
   return row;
 
   async function run(action: (file: SharedFile) => Promise<void>): Promise<void> {

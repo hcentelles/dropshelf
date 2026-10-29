@@ -5,18 +5,18 @@ import { copy, element } from './api';
 export function initMcpSetup(): void {
   element('copy-mcp-instructions').addEventListener('click', async () => {
     const instructions = element<HTMLTextAreaElement>('mcp-agent-instructions');
-    if (!await copy(instructions.value, 'Instructions copied.', 'Copy failed. Copy the selected instructions.')) {
+    if (!await copy(instructions.value, 'Instructions copied.', 'Copy failed. Copy the selected instructions.', element<HTMLButtonElement>('copy-mcp-instructions'))) {
       instructions.focus();
       instructions.select();
     }
   });
   element('copy-mcp-url').addEventListener('click', () => {
     void copy(element<HTMLInputElement>('mcp-server-url').value,
-      'MCP URL copied.', 'Copy failed. Select the server URL and copy it.');
+      'MCP URL copied.', 'Copy failed. Select the server URL and copy it.', element<HTMLButtonElement>('copy-mcp-url'));
   });
   element('copy-mcp-command').addEventListener('click', () => {
     void copy(element('mcp-codex-command').textContent ?? '',
-      'Commands copied.', 'Copy failed. Select the commands and copy them.');
+      'Commands copied.', 'Copy failed. Select the commands and copy them.', element<HTMLButtonElement>('copy-mcp-command'));
   });
 }
 

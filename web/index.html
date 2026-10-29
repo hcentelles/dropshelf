@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#1d2e6c" />
     <meta name="description" content="A private file shelf for teams." />
@@ -15,9 +15,10 @@
     <title>Drop Shelf</title>
   </head>
   <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
     <header class="topbar">
-      <a class="brand" href="/" id="brand">Drop Shelf</a>
-      <span class="brand-divider" aria-hidden="true"></span><span class="brand-section">Share</span>
+      <a class="brand" href="/"><img src="/assets/icons/drop-shelf.svg" alt="" width="32" height="32" /><span id="brand">Drop Shelf</span></a>
+      <span class="brand-divider" aria-hidden="true"></span><span class="brand-section" id="current-section">Files</span>
       <div class="account">
         <span class="access-label"><i class="ph ph-lock-simple" aria-hidden="true"></i> Team access</span>
         <details class="account-menu">
@@ -26,9 +27,9 @@
             <fieldset class="theme-options" id="theme-options">
               <legend>Appearance</legend>
               <div class="theme-choices">
-                <label class="theme-option"><input class="sr-only" type="radio" name="theme" value="system" checked /><span><i class="ph ph-desktop" aria-hidden="true"></i>System</span></label>
-                <label class="theme-option"><input class="sr-only" type="radio" name="theme" value="light" /><span><i class="ph ph-sun" aria-hidden="true"></i>Light</span></label>
-                <label class="theme-option"><input class="sr-only" type="radio" name="theme" value="dark" /><span><i class="ph ph-moon" aria-hidden="true"></i>Dark</span></label>
+                <label class="theme-option"><input type="radio" name="theme" value="system" checked /><span><i class="ph ph-desktop" aria-hidden="true"></i>System</span></label>
+                <label class="theme-option"><input type="radio" name="theme" value="light" /><span><i class="ph ph-sun" aria-hidden="true"></i>Light</span></label>
+                <label class="theme-option"><input type="radio" name="theme" value="dark" /><span><i class="ph ph-moon" aria-hidden="true"></i>Dark</span></label>
               </div>
             </fieldset>
             <a href="#trash" data-section="trash"><i class="ph ph-trash" aria-hidden="true"></i> Trash</a><a href="/cdn-cgi/access/logout"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</a>
@@ -36,15 +37,12 @@
         </details>
       </div>
     </header>
-    <main>
+    <main id="main-content" tabindex="-1">
       <div id="files-view">
-      <div class="page-heading-row"><div class="page-heading"><h1 id="files-page-heading" tabindex="-1">Shared files</h1><p>Pages, images, and documents for the team.</p></div><a class="button" href="#mcp" id="connect-mcp" data-section="mcp"><i class="ph ph-plugs-connected" aria-hidden="true"></i> Connect MCP</a></div>
+      <div class="page-heading-row"><div class="page-heading"><h1 id="files-page-heading" tabindex="-1">Shared files</h1><p>Files shared with your team.</p></div><a class="button" href="#mcp" id="connect-mcp" data-section="mcp"><i class="ph ph-plugs-connected" aria-hidden="true"></i> Connect MCP</a></div>
       <section class="drop-zone" id="drop-zone" aria-label="File upload" aria-busy="false">
-        <i class="ph ph-cloud-arrow-up upload-icon" aria-hidden="true"></i>
-        <h2>Drop files or folders here</h2>
-        <p id="supported-types">Loading supported file types…</p>
-        <div class="upload-actions"><button class="button primary" id="select-files"><i class="ph ph-upload-simple" aria-hidden="true"></i> <span>Select files</span></button><button class="button quiet" id="select-folder"><i class="ph ph-folder-open" aria-hidden="true"></i> <span>Select folder</span></button></div>
-        <span class="upload-limit" id="upload-limit">Loading upload settings…</span>
+        <div class="upload-copy"><i class="ph ph-cloud-arrow-up upload-icon" aria-hidden="true"></i><div><h2>Drop files or folders here</h2><p id="supported-types">Loading supported file types…</p><span class="upload-limit" id="upload-limit">Loading upload settings…</span></div></div>
+        <div class="upload-actions"><button class="button primary" id="select-files"><i class="ph ph-upload-simple" aria-hidden="true"></i> <span>Upload files</span></button><button class="button" id="select-folder"><i class="ph ph-folder-open" aria-hidden="true"></i> <span>Select folder</span></button></div>
         <input type="file" id="file-input" multiple hidden />
         <input type="file" id="folder-input" webkitdirectory multiple hidden />
       </section>
@@ -53,18 +51,18 @@
       <section class="files-section" aria-labelledby="files-heading">
         <div class="list-heading"><div><h2 id="files-heading">All files</h2><p id="file-count">Loading files…</p></div><label class="sort-control"><i class="ph ph-arrows-down-up" aria-hidden="true"></i><span class="sr-only">Sort files</span><select id="sort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Name A–Z</option></select></label></div>
         <div class="file-filters" role="search" aria-label="Shared file search">
-          <label class="search-field"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search files by name</span><input type="search" id="search" placeholder="Search file names…" maxlength="200" autocomplete="off" /></label>
+          <label class="search-field"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search files by name</span><input type="search" id="search" placeholder="Search file names…" maxlength="200" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="search" aria-keyshortcuts="/" /><kbd aria-hidden="true">/</kbd></label>
           <label class="filter-field"><i class="ph ph-funnel-simple" aria-hidden="true"></i><span class="sr-only">File type</span><select id="filter-type"><option value="">All file types</option></select></label>
           <label class="filter-field"><i class="ph ph-user" aria-hidden="true"></i><span class="sr-only">Author</span><select id="filter-author"><option value="">All authors</option></select></label>
           <button class="button quiet" id="clear-filters" hidden><i class="ph ph-x" aria-hidden="true"></i> Clear filters</button>
         </div>
         <div class="bulk-toolbar" id="bulk-toolbar" hidden role="region" aria-label="File selection actions">
           <span id="selection-count" role="status" aria-live="polite"></span>
-          <button class="button quiet" id="clear-selection"><i class="ph ph-x" aria-hidden="true"></i> Clear selection</button>
+          <button class="icon-button clear-selection" id="clear-selection" aria-label="Clear selection"><i class="ph ph-x" aria-hidden="true"></i></button>
           <button class="button quiet" id="select-matching"><i class="ph ph-checks" aria-hidden="true"></i> Select all matching files</button>
           <div class="bulk-actions"><button class="button" id="bulk-copy"><i class="ph ph-copy" aria-hidden="true"></i> Copy links</button><button class="button danger-outline" id="bulk-trash"><i class="ph ph-trash" aria-hidden="true"></i> Move to Trash</button></div></div>
         <div class="table-wrap">
-          <table><thead><tr><th scope="col" class="col-select"><input type="checkbox" id="select-all" aria-label="Select all loaded files" disabled /></th><th scope="col" class="col-name">Name</th><th scope="col" class="col-author">Uploaded by</th><th scope="col" class="col-link">Link</th><th scope="col" class="col-date">Date</th><th scope="col" class="col-actions"><span class="sr-only">Actions</span></th></tr></thead><tbody id="file-list"></tbody></table>
+          <table role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col" class="col-select"><label class="selection-target"><input type="checkbox" id="select-all" aria-label="Select all loaded files" disabled /></label></th><th role="columnheader" scope="col" class="col-name">Name</th><th role="columnheader" scope="col" class="col-author">Uploaded by</th><th role="columnheader" scope="col" class="col-link">Link</th><th role="columnheader" scope="col" class="col-date">Date</th><th role="columnheader" scope="col" class="col-actions"><span class="sr-only">Actions</span></th></tr></thead><tbody role="rowgroup" id="file-list"></tbody></table>
           <div class="empty-state" id="empty-state" hidden><i class="ph ph-files" aria-hidden="true"></i><h3>Your shelf is ready</h3><p>Drop your first file above.<br />Your team’s files will appear here.</p></div><div class="empty-state" id="no-results" hidden><i class="ph ph-magnifying-glass" aria-hidden="true"></i><h3>No matching files</h3><p>Change the search or filters and try again.</p><button class="button" id="reset-search"><i class="ph ph-x" aria-hidden="true"></i> Clear filters</button></div>
         </div>
         <div class="list-footer" id="list-footer" aria-live="polite"><span id="list-status">Loading files…</span><button class="button" id="load-more" hidden><i class="ph ph-arrow-down" aria-hidden="true"></i> Load more files</button><button class="button" id="retry-list" hidden><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Try again</button></div>
@@ -78,18 +76,18 @@
         <section class="files-section" aria-labelledby="trash-files-heading">
           <div class="list-heading"><div><h2 id="trash-files-heading">Files in Trash</h2><p id="trash-file-count">Loading files…</p></div><label class="sort-control"><i class="ph ph-arrows-down-up" aria-hidden="true"></i><span class="sr-only">Sort Trash files</span><select id="trash-sort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Name A–Z</option></select></label></div>
           <div class="file-filters" role="search" aria-label="Trash search">
-          <label class="search-field"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search Trash by name</span><input type="search" id="trash-search" placeholder="Search file names…" maxlength="200" autocomplete="off" /></label>
+          <label class="search-field"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search Trash by name</span><input type="search" id="trash-search" placeholder="Search file names…" maxlength="200" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="search" aria-keyshortcuts="/" /><kbd aria-hidden="true">/</kbd></label>
           <label class="filter-field"><i class="ph ph-funnel-simple" aria-hidden="true"></i><span class="sr-only">Trash file type</span><select id="trash-filter-type"><option value="">All file types</option></select></label>
           <label class="filter-field"><i class="ph ph-user" aria-hidden="true"></i><span class="sr-only">Trash author</span><select id="trash-filter-author"><option value="">All authors</option></select></label>
           <button class="button quiet" id="trash-clear-filters" hidden><i class="ph ph-x" aria-hidden="true"></i> Clear filters</button>
         </div>
         <div class="bulk-toolbar" id="trash-bulk-toolbar" hidden role="region" aria-label="Trash selection actions">
           <span id="trash-selection-count" role="status" aria-live="polite"></span>
-          <button class="button quiet" id="trash-clear-selection"><i class="ph ph-x" aria-hidden="true"></i> Clear selection</button>
+          <button class="icon-button clear-selection" id="trash-clear-selection" aria-label="Clear selection"><i class="ph ph-x" aria-hidden="true"></i></button>
           <button class="button quiet" id="trash-select-matching"><i class="ph ph-checks" aria-hidden="true"></i> Select all matching files</button>
           <div class="bulk-actions"><button class="button" id="trash-bulk-restore"><i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> Restore</button><button class="button danger-outline" id="trash-bulk-delete"><i class="ph ph-trash" aria-hidden="true"></i> Delete permanently</button></div></div>
         <div class="table-wrap">
-            <table><thead><tr><th scope="col" class="col-select"><input type="checkbox" id="trash-select-all" aria-label="Select all loaded Trash files" disabled /></th><th scope="col" class="col-name">Name</th><th scope="col" class="col-author">Uploaded by</th><th scope="col" class="col-link">Trashed by</th><th scope="col" class="col-date">Trashed</th><th scope="col" class="col-actions"><span class="sr-only">Actions</span></th></tr></thead><tbody id="trash-file-list"></tbody></table>
+            <table role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col" class="col-select"><label class="selection-target"><input type="checkbox" id="trash-select-all" aria-label="Select all loaded Trash files" disabled /></label></th><th role="columnheader" scope="col" class="col-name">Name</th><th role="columnheader" scope="col" class="col-author">Uploaded by</th><th role="columnheader" scope="col" class="col-link">Trashed by</th><th role="columnheader" scope="col" class="col-date">Trashed</th><th role="columnheader" scope="col" class="col-actions"><span class="sr-only">Actions</span></th></tr></thead><tbody role="rowgroup" id="trash-file-list"></tbody></table>
             <div class="empty-state" id="trash-empty-state" hidden><i class="ph ph-trash" aria-hidden="true"></i><h3>Trash is empty</h3><p>Files moved to Trash will appear here.</p></div><div class="empty-state" id="trash-no-results" hidden><i class="ph ph-magnifying-glass" aria-hidden="true"></i><h3>No matching files</h3><p>Change the search or filters and try again.</p><button class="button" id="trash-reset-search"><i class="ph ph-x" aria-hidden="true"></i> Clear filters</button></div>
           </div>
           <div class="list-footer" aria-live="polite"><span id="trash-list-status">Loading files…</span><button class="button" id="trash-load-more" hidden><i class="ph ph-arrow-down" aria-hidden="true"></i> Load more files</button><button class="button" id="trash-retry-list" hidden><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Try again</button></div>
@@ -214,7 +212,7 @@ CF-Access-Client-Secret: YOUR_SERVICE_CLIENT_SECRET</code></pre>
       <div class="dialog-actions"><button class="button" id="cancel-delete-file" autofocus><i class="ph ph-x" aria-hidden="true"></i> Cancel</button><button class="button danger" id="confirm-delete-file"><i class="ph ph-trash" aria-hidden="true"></i> <span>Delete permanently</span></button></div>
     </dialog>
     <dialog id="copy-links-dialog" class="confirm-dialog" aria-labelledby="copy-links-heading"><h2 id="copy-links-heading">Copy links</h2><p>Copy these links from the text box.</p><label class="sr-only" for="copy-links-text">Selected file links</label><textarea id="copy-links-text" readonly rows="8"></textarea><form method="dialog" class="dialog-actions"><button class="button"><i class="ph ph-x" aria-hidden="true"></i> Close</button></form></dialog>
-    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <div id="toast" class="toast" hidden><i class="ph ph-info" aria-hidden="true"></i><span id="toast-message" role="status" aria-live="polite" aria-atomic="true"></span><button class="icon-button" id="dismiss-toast" aria-label="Dismiss notification"><i class="ph ph-x" aria-hidden="true"></i></button></div>
     <script type="module" src="/main.ts"></script>
   </body>
 </html>

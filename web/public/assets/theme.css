@@ -14,9 +14,9 @@
   --primary: light-dark(#111111, #edf1f7);
   --primary-hover: light-dark(#2c2c2c, #cfd8e8);
   --on-primary: light-dark(#ffffff, #11151c);
-  --accent: light-dark(#68549a, #c5b5f5);
-  --accent-bg: light-dark(#f2effa, #2c2541);
-  --accent-border: light-dark(#d6d0ed, #534570);
+  --accent: light-dark(#414fb5, #b0c0ff);
+  --accent-bg: light-dark(#f1f4ff, #202b46);
+  --accent-border: light-dark(#cbd3fb, #3e527d);
   --avatar-bg: light-dark(#e1defd, #353052);
   --avatar-text: light-dark(#37317c, #d9d3ff);
   --success: light-dark(#08783c, #7cdca3);
@@ -36,6 +36,7 @@
   --toast-text: light-dark(#ffffff, #17202f);
   --shadow: light-dark(#10182825, #00000066);
   --backdrop: light-dark(#10182870, #000000a6);
+  --control-shadow: light-dark(#1018280d, #00000033);
   color: var(--text);
   background: var(--page);
 }

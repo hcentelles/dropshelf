@@ -11,6 +11,7 @@ interface FileListOptions {
 }
 
 export function createFileList(options: FileListOptions) {
+  const number = new Intl.NumberFormat('en');
   const node = (name: string) => element(`${options.prefix}${name}`);
   const rows = node('file-list');
   const header = node('select-all') as HTMLInputElement;
@@ -49,9 +50,10 @@ export function createFileList(options: FileListOptions) {
     header.checked = records.size > 0 && checked === records.size;
     header.indeterminate = checked > 0 && checked < records.size;
     toolbar.hidden = !selection.size && !busy && !collecting;
-    node('selection-count').textContent = collecting ? 'Selecting all matching files…' : busy ? busyText : `${selection.size} selected`;
+    node('selection-count').textContent = collecting ? 'Selecting all matching files…' : busy ? busyText : `${number.format(selection.size)} selected`;
     matching.hidden = !selection.size || selection.size >= total || busy;
-    matching.replaceChildren(icon('checks'), document.createTextNode(`Select all ${total} matching files`));
+    matching.replaceChildren(icon('checks'), document.createTextNode(`Select all ${number.format(total)}`));
+    matching.setAttribute('aria-label', `Select all ${number.format(total)} matching files`);
     for (const button of toolbar.querySelectorAll('button')) button.disabled = locked;
     for (const row of rows.querySelectorAll<HTMLTableRowElement>('tr')) {
       const selected = selection.has(row.dataset.fileId!);
@@ -70,7 +72,7 @@ export function createFileList(options: FileListOptions) {
   }
 
   function updateCount(): void {
-    node('file-count').textContent = `${total} ${total === 1 ? 'file' : 'files'}${search.active() ? ' found' : ''}`;
+    node('file-count').textContent = `${number.format(total)} ${total === 1 ? 'file' : 'files'}${search.active() ? ' found' : ''}`;
     node('empty-state').hidden = total !== 0 || !loaded || search.active();
     node('no-results').hidden = total !== 0 || !loaded || !search.active();
     if (loaded && !cursor) node('list-status').textContent = total
@@ -83,6 +85,7 @@ export function createFileList(options: FileListOptions) {
     records.set(file.id, file);
     const row = options.render(file);
     const cell = document.createElement('td');
+    cell.setAttribute('role', 'cell');
     cell.className = 'col-select';
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
@@ -93,7 +96,10 @@ export function createFileList(options: FileListOptions) {
       if (checkbox.checked) selection.set(file.id, file); else selection.delete(file.id);
       sync();
     });
-    cell.append(checkbox);
+    const target = document.createElement('label');
+    target.className = 'selection-target';
+    target.append(checkbox);
+    cell.append(target);
     row.prepend(cell);
     if (prepend) rows.prepend(row); else rows.append(row);
   }
@@ -144,7 +150,10 @@ export function createFileList(options: FileListOptions) {
     else selection.clear();
     sync();
   });
-  node('clear-selection').addEventListener('click', clearSelection);
+  node('clear-selection').addEventListener('click', () => {
+    clearSelection();
+    header.focus({ preventScroll: true });
+  });
   node('reset-search').addEventListener('click', () => { node('clear-filters').click(); });
   matching.addEventListener('click', () => { void selectMatching(); });
   async function selectMatching(): Promise<void> {

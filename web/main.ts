@@ -6,6 +6,7 @@ import { api, element, icon, initials, toast } from './api';
 import { applyFileAction, copyFileLinks } from './bulk-actions';
 import { fileRow } from './file-row';
 import { createFileList } from './file-list';
+import { initInteractions } from './interactions';
 import { initMcpSetup, showMcpSetupError, updateMcpSetup } from './mcp-setup';
 import { currentSection, initNavigation } from './navigation';
 import { initTrashView } from './trash';
@@ -141,15 +142,7 @@ dropZone.addEventListener('drop', event => {
   void files.then(startUpload).catch(() => { showNotice('The folder could not be read. Use Select folder to try again.', true); });
 });
 
-document.addEventListener('click', event => {
-  for (const menu of document.querySelectorAll<HTMLDetailsElement>('.account-menu[open], .file-menu[open]')) {
-    if (event.target instanceof Node && !menu.contains(event.target)) menu.open = false;
-  }
-});
-document.addEventListener('keydown', event => {
-  if (event.key === 'Escape') for (const menu of document.querySelectorAll<HTMLDetailsElement>('.account-menu[open], .file-menu[open]')) menu.open = false;
-});
-
+initInteractions();
 initMcpSetup();
 initNavigation(section => {
   if (section !== 'trash') trash.leave();

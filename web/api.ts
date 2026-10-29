@@ -19,20 +19,76 @@ export function element<T extends HTMLElement>(id: string): T {
   return node as T;
 }
 
-let toastTimer: ReturnType<typeof setTimeout>;
-export function toast(message: string): void {
-  const box = element('toast');
-  box.textContent = message;
-  box.hidden = false;
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+let toastRemaining = 0;
+let toastStarted = 0;
+let toastReady = false;
+let toastHovered = false;
+let toastReturnFocus: HTMLElement | null = null;
+
+function pauseToast(): void {
+  if (!toastTimer) return;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { box.hidden = true; }, 2800);
+  toastTimer = undefined;
+  toastRemaining = Math.max(0, toastRemaining - (Date.now() - toastStarted));
 }
 
+function resumeToast(): void {
+  const box = element('toast');
+  if (box.hidden || document.hidden || toastHovered || box.contains(document.activeElement)) return;
+  pauseToast();
+  toastStarted = Date.now();
+  toastTimer = setTimeout(() => { box.hidden = true; toastTimer = undefined; }, toastRemaining);
+}
+
+export function toast(message: string): void {
+  const box = element('toast');
+  if (!toastReady) {
+    element('dismiss-toast').addEventListener('click', () => {
+      const restoreFocus = box.contains(document.activeElement);
+      pauseToast();
+      box.hidden = true;
+      if (restoreFocus && toastReturnFocus?.isConnected) toastReturnFocus.focus({ preventScroll: true });
+    });
+    box.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') { toastHovered = true; pauseToast(); } });
+    box.addEventListener('pointerleave', () => { toastHovered = false; resumeToast(); });
+    box.addEventListener('focusin', pauseToast);
+    box.addEventListener('focusout', () => { setTimeout(resumeToast, 0); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) pauseToast(); else resumeToast(); });
+    toastReady = true;
+  }
+  pauseToast();
+  if (document.activeElement instanceof HTMLElement && !box.contains(document.activeElement)) toastReturnFocus = document.activeElement;
+  element('toast-message').textContent = message;
+  box.hidden = false;
+  toastRemaining = Math.min(12_000, Math.max(5_000, message.length * 70));
+  resumeToast();
+}
+
+const copyFeedback = new WeakMap<HTMLButtonElement, { icon: string; timer: ReturnType<typeof setTimeout> }>();
 export async function copy(
   text: string, successMessage = 'Link copied.',
   failureMessage = 'Copy failed. Open the link and copy it from the address bar.',
+  button?: HTMLButtonElement,
 ): Promise<boolean> {
-  try { await navigator.clipboard.writeText(text); toast(successMessage); return true; }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(successMessage);
+    const glyph = button?.querySelector<HTMLElement>('.ph');
+    if (button && glyph) {
+      const previous = copyFeedback.get(button);
+      clearTimeout(previous?.timer);
+      const original = previous?.icon ?? glyph.className;
+      glyph.className = 'ph ph-check';
+      button.classList.add('is-copied');
+      copyFeedback.set(button, { icon: original, timer: setTimeout(() => {
+        glyph.className = original;
+        button.classList.remove('is-copied');
+        copyFeedback.delete(button);
+      }, 1800) });
+    }
+    return true;
+  }
   catch { toast(failureMessage); return false; }
 }
 
