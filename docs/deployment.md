@@ -110,7 +110,7 @@ Check the complete flow before you invite the team:
 4. Open the HTML and image links. Check the uploader and date in the list.
 5. Upload a folder with `index.html` and a relative image. Open the HTML and verify the image.
 6. Copy one link and the links from a completed upload.
-7. Load older files. Verify that pages do not repeat entries.
+7. Check newest, oldest, and name sorting in Files and Trash. Load more files and verify that pages do not repeat or skip entries.
 8. Connect your MCP client using OAuth. Call `whoami`, upload a file, and verify the same email in the browser list.
 9. Confirm that an unapproved email cannot pass the Access policy.
 10. Confirm that the content hostname returns no UI, file list, or MCP tools.

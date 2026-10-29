@@ -102,7 +102,7 @@ For a folder:
 
 The `ALLOWED_FILE_TYPES` Worker variable applies to MCP uploads too. The `upload_file` tool description reports the active setting.
 
-Use `list_files` to get the newest files. Pass its `nextCursor` as `cursor` on the next call. Keep the same `view`, `q`, `type`, and `author` on every page. Use `get_file` with an ID to get one record.
+Use `list_files` to get the newest files by default. Set `sort` to `newest`, `oldest`, or `name` (A–Z). Date sorting uses upload time for files and the time moved to Trash for Trash. Name sorting ignores ASCII letter case and uses the file ID to break ties. Pass `nextCursor` as `cursor` on the next call. Keep the same `view`, `q`, `type`, `author`, and `sort` on every page. Start without a cursor when you change the sort order. Use `get_file` with an ID to get one record.
 
 ## Search, filters, and bulk actions
 

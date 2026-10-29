@@ -7,7 +7,7 @@ A private file shelf for teams. Drop files or folders, then copy links that open
 - Drop files and folders, or select them from your computer.
 - Configure allowed file types through a Worker variable. The default includes HTML, images, Markdown, CSV, and PDF. Skip unsupported files and report the result.
 - Keep folder paths so relative image links work.
-- Show new files first, with infinite scroll, uploader identity, upload date, and copy actions.
+- Sort files and Trash by newest first, oldest first, or name A–Z, with infinite scroll, uploader identity, dates, and copy actions.
 - Search file names and filter by file type or author across the full file history.
 - Select files across pages. Copy their links, move them to Trash, restore them, or delete them permanently.
 - Open or download each file through a stable, protected URL.

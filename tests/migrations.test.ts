@@ -2,8 +2,9 @@ import { env, exports } from 'cloudflare:workers';
 import { expect, it } from 'vitest';
 import originalSchema from '../migrations/0001_files.sql?raw';
 import trashSchema from '../migrations/0002_trash.sql?raw';
+import sortingSchema from '../migrations/0003_file_name_order.sql?raw';
 
-it('preserves existing file records, upload groups, and content while adding Trash', async () => {
+it('preserves existing file records, upload groups, and content while adding Trash and sort indexes', async () => {
   const apply = (sql: string) => env.DB.batch(sql.split(';').map(item => item.trim()).filter(Boolean).map(item => env.DB.prepare(item)));
   await apply(originalSchema);
   const group = crypto.randomUUID();
@@ -19,6 +20,7 @@ it('preserves existing file records, upload groups, and content while adding Tra
   await env.FILES.put(`${group}/folder/café.html`, '<h1>Existing</h1>');
   const before = await env.DB.prepare('SELECT * FROM files ORDER BY id').all();
   await apply(trashSchema);
+  await apply(sortingSchema);
   const after = await env.DB.prepare(`SELECT id, upload_id, path, name, object_key, content_type, size,
     uploader_id, uploader_email, uploader_label, source, status, created_at FROM files ORDER BY id`).all();
   expect(after.results).toEqual(before.results);

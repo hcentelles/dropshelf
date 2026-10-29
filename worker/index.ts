@@ -1,4 +1,4 @@
-import type { AppConfig, FileView } from '../shared/types';
+import type { AppConfig, FileSort, FileView } from '../shared/types';
 import { authenticate } from './auth';
 import { serveContent } from './content';
 import { createUpload, getFile, listFiles, thumbnail, uploadFile } from './files';
@@ -35,7 +35,8 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
       return json(await listFiles(env, url.searchParams.get('cursor'),
         url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : undefined,
         (url.searchParams.get('view') ?? 'files') as FileView,
-        { q: url.searchParams.get('q') ?? '', type: url.searchParams.get('type') ?? '', author: url.searchParams.get('author') ?? '' }));
+        { q: url.searchParams.get('q') ?? '', type: url.searchParams.get('type') ?? '', author: url.searchParams.get('author') ?? '',
+          sort: (url.searchParams.get('sort') ?? 'newest') as FileSort }));
     }
     if (url.pathname === '/api/files/filters' && request.method === 'GET') {
       return json(await getFileFilters(env, (url.searchParams.get('view') ?? 'files') as FileView));

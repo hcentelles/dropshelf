@@ -30,8 +30,10 @@ export interface FilePage {
 }
 
 export type FileView = 'files' | 'trash';
+export type FileSort = 'newest' | 'oldest' | 'name';
 
 export interface FileFilters { q?: string; type?: string; author?: string }
+export interface FileQuery extends FileFilters { sort?: FileSort }
 export interface FileFilterOptions {
   total: number;
   types: Array<{ value: string; label: string; count: number }>;

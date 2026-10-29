@@ -29,10 +29,10 @@ export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, use
       annotations: { readOnlyHint: true },
     }, async () => ({ content: [{ type: 'text', text: JSON.stringify(user) }] }));
     server.registerTool('list_files', {
-      description: 'List team files or Trash, newest first. Search file names with q. Filter with a MIME type or image/* and an author ID from get_file_filters. Keep the same view and filters with nextCursor.',
-      inputSchema: { cursor: z.string().max(4096).optional(), limit: z.number().int().min(1).max(100).optional(), view: z.enum(['files', 'trash']).default('files'), q: z.string().max(200).optional(), type: z.string().max(100).optional(), author: z.string().max(256).optional() },
+      description: 'List team files or Trash. Sort by newest (default), oldest, or name (A–Z). Date sorting uses upload time for files and Trash time for Trash. Search file names with q. Filter with a MIME type or image/* and an author ID from get_file_filters. Keep the same view, filters, and sort with nextCursor.',
+      inputSchema: { cursor: z.string().max(4096).optional(), limit: z.number().int().min(1).max(100).optional(), view: z.enum(['files', 'trash']).default('files'), q: z.string().max(200).optional(), type: z.string().max(100).optional(), author: z.string().max(256).optional(), sort: z.enum(['newest', 'oldest', 'name']).default('newest') },
       annotations: { readOnlyHint: true },
-    }, ({ cursor, limit, view, q, type, author }) => result(() => listFiles(env, cursor ?? null, limit, view, { q, type, author })));
+    }, ({ cursor, limit, view, q, type, author, sort }) => result(() => listFiles(env, cursor ?? null, limit, view, { q, type, author, sort })));
     server.registerTool('get_file_filters', {
       description: 'List file types and uploader IDs for filtering all files in a view, including older pages.',
       inputSchema: { view: z.enum(['files', 'trash']).default('files') }, annotations: { readOnlyHint: true },

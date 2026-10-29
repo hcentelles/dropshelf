@@ -113,7 +113,7 @@ export function createFileList(options: FileListOptions) {
     if (reset) pending = true;
     node('retry-list').hidden = true;
     node('load-more').hidden = true;
-    node('list-status').textContent = reset ? 'Loading files…' : 'Loading older files…';
+    node('list-status').textContent = reset ? 'Loading files…' : 'Loading more files…';
     sync();
     void search.refresh();
     try {
@@ -133,7 +133,7 @@ export function createFileList(options: FileListOptions) {
       if (controller.signal.aborted || started !== revision) return;
       retryReset = reset || !loaded;
       fail(error instanceof Error ? error.message : 'Could not load files.');
-      // Keep old rows inactive after a failed filter change.
+      // Keep old rows inactive after a failed search or sort change.
     } finally {
       if (request === controller) { request = undefined; sync(); }
     }
@@ -181,7 +181,7 @@ export function createFileList(options: FileListOptions) {
     setBusy(value: boolean, message = ''): void { busy = value; busyText = message; sync(); },
     insert(file: SharedFile): void {
       search.invalidate();
-      if (search.active() || busy) { stale = true; return; }
+      if (search.active() || search.values().sort !== 'newest' || busy) { stale = true; return; }
       if (records.has(file.id)) return;
       revision++;
       append(file, true);

@@ -82,3 +82,18 @@ it('supports PDF search, author facets, and confirmed bulk actions through MCP',
   expect(JSON.parse(restored.result.result.content[0].text).results[0].ok).toBe(true);
   expect((await exports.default.fetch(file.url)).status).toBe(200);
 });
+
+it('sorts MCP results by name across pages and rejects a changed sort order', async () => {
+  for (const path of ['sort-check-zulu.html', 'sort-check-alpha.html']) {
+    await rpc('tools/call', { name: 'upload_file', arguments: { path, content: '<h1>Sort check</h1>' } });
+  }
+  const args = { q: 'sort-check', sort: 'name', limit: 1 };
+  const first = await rpc('tools/call', { name: 'list_files', arguments: args });
+  expect(first.result.result.isError).not.toBe(true);
+  const page = JSON.parse(first.result.result.content[0].text);
+  expect(page.files[0].name).toBe('sort-check-alpha.html');
+  const second = await rpc('tools/call', { name: 'list_files', arguments: { ...args, cursor: page.nextCursor } });
+  expect(JSON.parse(second.result.result.content[0].text).files[0].name).toBe('sort-check-zulu.html');
+  const changed = await rpc('tools/call', { name: 'list_files', arguments: { ...args, sort: 'oldest', cursor: page.nextCursor } });
+  expect(changed.result.result.isError).toBe(true);
+});

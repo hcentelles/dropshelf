@@ -1,4 +1,4 @@
-import type { FileFilters, FileFilterOptions, FilePage, FileView } from '../shared/types';
+import type { FileFilters, FileFilterOptions, FilePage, FileQuery, FileView } from '../shared/types';
 import { fileTypeLabel } from '../shared/formats';
 import { present, type FileRow } from './file-record';
 import { HttpError } from './http';
@@ -28,10 +28,13 @@ function decode(value: string): unknown {
   return JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(Uint8Array.from(atob(value), char => char.charCodeAt(0))));
 }
 
-export async function listFiles(env: Env, cursor: string | null, limit = 30, view: FileView = 'files', input: FileFilters = {}): Promise<FilePage> {
+export async function listFiles(env: Env, cursor: string | null, limit = 30, view: FileView = 'files', input: FileQuery = {}): Promise<FilePage> {
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new HttpError(400, 'Use a limit from 1 to 100.');
+  const sort = input.sort ?? 'newest';
+  if (!['newest', 'oldest', 'name'].includes(sort)) throw new HttpError(400, 'Use newest, oldest, or name for sorting.');
   const filters = normalize(input);
-  const key = JSON.stringify([filters.q, filters.type, filters.author]);
+  // Keep existing newest-first cursors valid after deployment.
+  const key = JSON.stringify([filters.q, filters.type, filters.author, ...(sort === 'newest' ? [] : [sort])]);
   const noFilters = !filters.q && !filters.type && !filters.author;
   let where = base(view);
   const params: Array<string | number> = [];
@@ -44,21 +47,27 @@ export async function listFiles(env: Env, cursor: string | null, limit = 30, vie
     params.push(filters.type.endsWith('/*') ? `${filters.type.slice(0, -1)}%` : filters.type);
   }
   if (filters.author) { where += ' AND uploader_id = ?'; params.push(filters.author); }
-  let point: [number, string] | undefined;
+  let point: [number | string, string] | undefined;
   if (cursor) {
     try {
       const value = decode(cursor);
       if (!Array.isArray(value)) throw new Error();
       let parts = value;
-      if (noFilters && value.length === 2 && view === 'files') parts = [view, key, ...value];
-      if (noFilters && value.length === 3) parts = [value[0], key, value[1], value[2]];
-      if (parts.length !== 4 || parts[0] !== view || parts[1] !== key || !Number.isSafeInteger(parts[2]) ||
+      if (sort === 'newest' && noFilters && value.length === 2 && view === 'files') parts = [view, key, ...value];
+      if (sort === 'newest' && noFilters && value.length === 3) parts = [value[0], key, value[1], value[2]];
+      const validPosition = sort === 'name'
+        ? typeof parts[2] === 'string' && parts[2].length > 0 && parts[2].length <= 1024
+        : Number.isSafeInteger(parts[2]);
+      if (parts.length !== 4 || parts[0] !== view || parts[1] !== key || !validPosition ||
         typeof parts[3] !== 'string' || !/^[0-9a-f-]{36}$/.test(parts[3])) throw new Error();
-      point = [parts[2] as number, parts[3]];
-    } catch { throw new HttpError(400, 'The page cursor does not match this search and view.'); }
+      point = [parts[2] as number | string, parts[3]];
+    } catch { throw new HttpError(400, 'The page cursor does not match this search, sort order, and view.'); }
   }
   const date = view === 'trash' ? 'trashed_at' : 'created_at';
-  const page = env.DB.prepare(`SELECT * FROM files WHERE ${where}${point ? ` AND (${date}, id) < (?, ?)` : ''} ORDER BY ${date} DESC, id DESC LIMIT ?`)
+  const column = sort === 'name' ? 'name COLLATE NOCASE' : date;
+  const direction = sort === 'newest' ? 'DESC' : 'ASC';
+  const comparison = sort === 'newest' ? '<' : '>';
+  const page = env.DB.prepare(`SELECT * FROM files WHERE ${where}${point ? ` AND (${column}, id) ${comparison} (?, ?)` : ''} ORDER BY ${column} ${direction}, id ${direction} LIMIT ?`)
     .bind(...params, ...(point ?? []), limit + 1);
   const [rows, count] = await Promise.all([
     page.all<FileRow>(), env.DB.prepare(`SELECT COUNT(*) AS total FROM files WHERE ${where}`).bind(...params).first<{ total: number }>(),
@@ -67,7 +76,8 @@ export async function listFiles(env: Env, cursor: string | null, limit = 30, vie
   const last = files.at(-1);
   return {
     files: files.map(row => present(row, env)), total: count?.total ?? 0,
-    nextCursor: rows.results.length > limit && last ? encode([view, key, view === 'trash' ? last.trashed_at : last.created_at, last.id]) : null,
+    nextCursor: rows.results.length > limit && last
+      ? encode([view, key, sort === 'name' ? last.name : view === 'trash' ? last.trashed_at : last.created_at, last.id]) : null,
   };
 }
 

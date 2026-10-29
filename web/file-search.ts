@@ -1,18 +1,19 @@
 import { fileTypeLabel } from '../shared/formats';
-import type { FileFilters, FileFilterOptions, FilePage, FileView, SharedFile } from '../shared/types';
+import type { FileQuery, FileSort, FileFilterOptions, FilePage, FileView, SharedFile } from '../shared/types';
 import { api, element } from './api';
 
-export function fileQuery(view: FileView, filters: FileFilters, cursor?: string | null, limit?: number): string {
+export function fileQuery(view: FileView, filters: FileQuery, cursor?: string | null, limit?: number): string {
   const query = new URLSearchParams({ view });
   if (filters.q) query.set('q', filters.q);
   if (filters.type) query.set('type', filters.type);
   if (filters.author) query.set('author', filters.author);
+  if (filters.sort) query.set('sort', filters.sort);
   if (cursor) query.set('cursor', cursor);
   if (limit) query.set('limit', String(limit));
   return `/api/files?${query}`;
 }
 
-export async function collectFiles(view: FileView, filters: FileFilters, signal?: AbortSignal): Promise<SharedFile[]> {
+export async function collectFiles(view: FileView, filters: FileQuery, signal?: AbortSignal): Promise<SharedFile[]> {
   const files = new Map<string, SharedFile>();
   const cursors = new Set<string>();
   let cursor: string | null = null;
@@ -30,6 +31,7 @@ export function initFileSearch(prefix: string, view: FileView, changed: (fetch: 
   const q = element<HTMLInputElement>(`${prefix}search`);
   const type = element<HTMLSelectElement>(`${prefix}filter-type`);
   const author = element<HTMLSelectElement>(`${prefix}filter-author`);
+  const sort = element<HTMLSelectElement>(`${prefix}sort`);
   const clear = element<HTMLButtonElement>(`${prefix}clear-filters`);
   const labels = new Map<string, string>();
   let timer: ReturnType<typeof setTimeout>;
@@ -38,7 +40,7 @@ export function initFileSearch(prefix: string, view: FileView, changed: (fetch: 
   let revision = 0;
   let total = 0;
 
-  const values = (): FileFilters => ({ q: q.value.trim().normalize('NFC'), type: type.value, author: author.value });
+  const values = (): FileQuery => ({ q: q.value.trim().normalize('NFC'), type: type.value, author: author.value, sort: sort.value as FileSort });
   const active = () => !!(q.value.trim() || type.value || author.value);
   function change(debounce: boolean): void {
     clearTimeout(timer);
@@ -50,6 +52,7 @@ export function initFileSearch(prefix: string, view: FileView, changed: (fetch: 
   q.addEventListener('input', () => { change(true); });
   type.addEventListener('change', () => { change(false); });
   author.addEventListener('change', () => { change(false); });
+  sort.addEventListener('change', () => { change(false); });
   clear.addEventListener('click', () => { q.value = ''; type.value = ''; author.value = ''; change(false); q.focus(); });
 
   function options(select: HTMLSelectElement, first: string, entries: FileFilterOptions['types'], fallback: string): void {
@@ -84,6 +87,6 @@ export function initFileSearch(prefix: string, view: FileView, changed: (fetch: 
     values, active, refresh,
     invalidate: () => { dirty = true; revision++; },
     get total() { return total; },
-    lock(locked: boolean): void { q.disabled = locked; type.disabled = locked; author.disabled = locked; clear.disabled = locked; },
+    lock(locked: boolean): void { q.disabled = locked; type.disabled = locked; author.disabled = locked; sort.disabled = locked; clear.disabled = locked; },
   };
 }
