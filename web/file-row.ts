@@ -1,6 +1,6 @@
 import { canPreview, formatSize } from '../shared/formats';
 import type { SharedFile } from '../shared/types';
-import { copy, icon, initials } from './api';
+import { copy, icon, identityLabel, initials } from './api';
 
 function text(tag: string, value: string, className = ''): HTMLElement {
   const node = document.createElement(tag);
@@ -55,7 +55,8 @@ export function fileRow(file: SharedFile, fresh: boolean, callbacks: FileActions
   if (fresh) title.append(text('span', 'New', 'new-badge'));
   const type = file.contentType === 'text/html' ? 'HTML' : (file.name.split('.').at(-1) ?? 'Image').toUpperCase();
   const dateValue = file.trashedAt ?? file.createdAt;
-  const mobileMeta = text('div', `${file.uploaderLabel} · ${new Date(dateValue).toLocaleDateString('en')}`, 'mobile-meta');
+  const uploaderName = identityLabel(file.uploaderLabel);
+  const mobileMeta = text('div', `${uploaderName} · ${new Date(dateValue).toLocaleDateString('en')}`, 'mobile-meta');
   mobileMeta.title = mobileMeta.textContent ?? '';
   details.append(title, text('div', `${type} · ${formatSize(file.size)}`, 'file-meta'), mobileMeta);
   details.title = file.path;
@@ -64,15 +65,15 @@ export function fileRow(file: SharedFile, fresh: boolean, callbacks: FileActions
   const uploader = document.createElement('td');
   uploader.className = 'col-author';
   const person = text('div', '', 'person');
-  person.title = file.uploaderLabel;
-  person.append(text('span', initials(file.uploaderLabel), 'avatar small'), text('span', file.uploaderLabel, 'person-label'));
+  person.title = uploaderName;
+  person.append(text('span', initials(file.uploaderLabel), 'avatar small'), text('span', uploaderName, 'person-label'));
   if (file.source === 'mcp') person.append(text('span', 'MCP', 'source-badge'));
   uploader.append(person);
   const linkCell = document.createElement('td');
   linkCell.className = 'col-link';
   if (inTrash) {
-    const actor = text('span', file.trashedBy ?? '', 'person-label trash-actor');
-    actor.title = file.trashedBy ?? '';
+    const actor = text('span', identityLabel(file.trashedBy ?? ''), 'person-label trash-actor');
+    actor.title = actor.textContent ?? '';
     linkCell.append(actor);
   } else {
     const fileLink = link(`…/${file.path}`, file.url, 'file-link');

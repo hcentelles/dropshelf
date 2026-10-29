@@ -1,6 +1,6 @@
 import { fileTypeLabel } from '../shared/formats';
 import type { FileQuery, FileSort, FileFilterOptions, FilePage, FileView, SharedFile } from '../shared/types';
-import { api, element } from './api';
+import { api, element, identityLabel } from './api';
 
 export function fileQuery(view: FileView, filters: FileQuery, cursor?: string | null, limit?: number): string {
   const query = new URLSearchParams({ view });
@@ -70,9 +70,10 @@ export function initFileSearch(prefix: string, view: FileView, changed: (fetch: 
     try {
       const result = await api<FileFilterOptions>(`/api/files/filters?view=${view}`);
       if (started !== revision) return;
-      for (const entry of result.authors) labels.set(entry.value, entry.label);
+      const authors = result.authors.map(entry => ({ ...entry, label: identityLabel(entry.label) }));
+      for (const entry of authors) labels.set(entry.value, entry.label);
       options(type, 'All file types', result.types, fileTypeLabel(type.value));
-      options(author, 'All authors', result.authors, labels.get(author.value) ?? 'Selected author');
+      options(author, 'All authors', authors, labels.get(author.value) ?? 'Selected author');
       total = result.total;
       dirty = false;
       onTotal?.(total);

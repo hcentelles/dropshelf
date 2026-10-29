@@ -99,6 +99,10 @@ export function icon(name: string): HTMLElement {
   return node;
 }
 
+export function identityLabel(label: string): string {
+  return label.replace(/^([^\s@]+)@[^\s@]+$/, '$1');
+}
+
 export function initials(label: string): string {
   const name = label.split('@')[0] ?? label;
   const parts = name.split(/[._\s-]+/).filter(Boolean);
