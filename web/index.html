@@ -15,13 +15,13 @@
         <span class="access-label"><i class="ph ph-lock-simple" aria-hidden="true"></i> Team access</span>
         <details class="account-menu">
           <summary><span class="avatar" id="user-avatar">DS</span><span id="user-email">Loading…</span><i class="ph ph-caret-down" aria-hidden="true"></i></summary>
-          <div class="menu-panel"><a href="#trash" data-section="trash"><i class="ph ph-trash" aria-hidden="true"></i> Trash</a><a href="#mcp" id="connect-mcp" data-section="mcp"><i class="ph ph-plugs-connected" aria-hidden="true"></i> Connect MCP</a><a href="/cdn-cgi/access/logout"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</a></div>
+          <div class="menu-panel"><a href="#trash" data-section="trash"><i class="ph ph-trash" aria-hidden="true"></i> Trash</a><a href="/cdn-cgi/access/logout"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</a></div>
         </details>
       </div>
     </header>
     <main>
       <div id="files-view">
-      <div class="page-heading-row"><div class="page-heading"><h1 id="files-page-heading" tabindex="-1">Shared files</h1><p>Pages, images, and documents for the team.</p></div></div>
+      <div class="page-heading-row"><div class="page-heading"><h1 id="files-page-heading" tabindex="-1">Shared files</h1><p>Pages, images, and documents for the team.</p></div><a class="button" href="#mcp" id="connect-mcp" data-section="mcp"><i class="ph ph-plugs-connected" aria-hidden="true"></i> Connect MCP</a></div>
       <section class="drop-zone" id="drop-zone" aria-label="File upload" aria-busy="false">
         <i class="ph ph-cloud-arrow-up upload-icon" aria-hidden="true"></i>
         <h2>Drop files or folders here</h2>
@@ -86,6 +86,13 @@
           <h1 id="mcp-heading" tabindex="-1">Connect MCP</h1>
           <p>Let your agent upload files and get shared links.</p>
         </div>
+        <section class="setup-card mcp-agent-setup" aria-labelledby="mcp-agent-heading">
+          <div class="mcp-agent-heading"><h2 id="mcp-agent-heading">Set up with your agent</h2><button class="button" id="copy-mcp-instructions" disabled><i class="ph ph-copy" aria-hidden="true"></i> Copy instructions</button></div>
+          <p>Copy these instructions and paste them into your agent. It can configure the connection and start sign-in for you.</p>
+          <label class="sr-only" for="mcp-agent-instructions">Agent setup instructions</label>
+          <textarea id="mcp-agent-instructions" class="mcp-agent-prompt" readonly spellcheck="false" rows="10" placeholder="Loading instructions…"></textarea>
+          <p class="setup-hint">Complete any sign-in or access approval when prompted. You can also use the manual steps below.</p>
+        </section>
         <p class="mcp-local-note" id="mcp-local-note" hidden>This local instance uses a test identity. Skip the sign-in step.</p>
         <ol class="mcp-steps" role="list" aria-label="MCP setup steps">
           <li>

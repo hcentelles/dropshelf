@@ -2,7 +2,9 @@
 
 The endpoint is `https://YOUR_APP_HOST/mcp`. It supports the Streamable HTTP transport. It uses the same file service, storage, and identity checks as the browser API.
 
-For setup instructions in the app, open the account menu and select **Connect MCP**, or open `https://YOUR_APP_HOST/#mcp`. The section uses the current instance URL, allowed file types, and upload limit.
+For setup instructions in the app, select **Connect MCP** beside the **Shared files** heading, or open `https://YOUR_APP_HOST/#mcp`. The section uses the current instance URL, allowed file types, and upload limit.
+
+The first section, **Set up with your agent**, has a **Copy instructions** button. Paste the instructions into your agent to configure its MCP client. They include the current server URL, transport, authentication steps, and connection checks. The instructions apply to any compatible client. They ask the agent to preserve existing settings and verify access with `whoami` and `list_files`. Complete any sign-in or access approval that the client requires. Manual setup steps follow this section.
 
 ## User authentication
 

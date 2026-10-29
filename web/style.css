@@ -175,6 +175,10 @@ time { font-size: 12px; color: #475467; white-space: nowrap; }
 .setup-card > h2 { margin-bottom: 12px; }
 .setup-card > p { color: #667085; font-size: 12px; margin-top: 10px; }
 .setup-card strong { font-weight: 550; color: #475467; }
+.mcp-agent-setup { margin-top: 26px; border-color: #d6d0ed; background: #fcfbff; }
+.mcp-agent-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.mcp-agent-prompt { display: block; width: 100%; margin-top: 16px; padding: 14px; resize: vertical; min-height: 160px; border: 1px solid #d0d5dd; border-radius: 6px; background: #fff; color: #344054; font: 12px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.mcp-agent-prompt:focus-visible { outline: 3px solid #8d99fb; outline-offset: 2px; }
 .mcp-tools { margin: 0; font-size: 12px; }
 .mcp-tools > div { display: grid; grid-template-columns: minmax(106px, 1fr) 1fr; gap: 10px; margin-top: 11px; }
 .mcp-tools dt { overflow-wrap: anywhere; }
