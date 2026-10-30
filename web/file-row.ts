@@ -144,13 +144,6 @@ export function fileRow(file: ExplorerEntry, fresh: boolean, callbacks: FileActi
   summary.setAttribute('aria-label', `More options for ${file.name}`);
   summary.append(icon('dots-three'));
   const panel = text('div', '', 'menu-panel');
-  const expiry = expiryDisplay(file);
-  expiry.id = `expiry-${crypto.randomUUID()}`;
-  summary.setAttribute('aria-describedby', expiry.id);
-  const expiryInfo = text('div', '', 'menu-expiry');
-  expiryInfo.append(icon('clock'), expiry);
-  panel.append(expiryInfo);
-  menu.addEventListener('toggle', () => { if (menu.open) refreshExpiryDisplay(expiry); });
   const remove = document.createElement('button');
   remove.className = 'menu-danger';
   remove.append(icon('trash'), text('span', inTrash ? file.deletionPending ? 'Retry permanent delete' : 'Delete permanently' : 'Move to Trash'));

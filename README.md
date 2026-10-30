@@ -138,7 +138,7 @@ Permanent deletion removes the R2 object and file record. Link reservations, the
 
 The default settings move files to Trash after **30 days**, then delete them permanently after **7 days in Trash**. An hourly job runs on the app Worker, including when no browser is open. Actions occur on the next successful check after each period ends.
 
-In Files, point to or focus the date, or open **More options**, to see the remaining time and exact expiry date. In Trash, the **Deletes in** column stays visible. On a phone, this value appears below the file name. A Trash folder with different deletion dates shows a range. The values update each minute while the page is visible.
+In Files, point to or focus the date to see the remaining time and exact expiry date. In Trash, the **Deletes in** column stays visible. On a phone, this value appears below the file name. A Trash folder with different deletion dates shows a range. The values update each minute while the page is visible.
 
 - A file at the root uses its last completed upload, replacement, or restore date. Opening, downloading, or previewing a file does not extend its life.
 - A top-level folder is one expiry group. Its date is the latest upload, replacement, or restore among its active files, including nested folders and files from other upload groups. The whole group moves to Trash together. A pending upload blocks expiry for that group. This keeps HTML pages and their assets together.
