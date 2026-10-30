@@ -151,6 +151,8 @@ Any approved team member or configured service identity can manage Trash:
 
 `get_file` includes `trashedAt`, `trashedBy`, and `deletionPending`. A pending permanent deletion cannot be restored. Retry `delete_file_permanently` to finish it. Repeated permanent-delete calls for the same file ID are safe.
 
+Automatic expiry uses the same file store for browser and MCP uploads. The default is 30 days from the last completed upload, replacement, or restore, followed by 7 days in Trash. Each instance can change both periods. A top-level folder moves to Trash as one group, based on the latest date among its active files. Opening files and calling read-only tools do not reset the period. Restore starts a full new active period and keeps upload dates and URLs. An hourly server job applies the policy without agent calls. See [automatic expiry](../README.md#automatic-expiry).
+
 Deletion removes the file record and stored bytes. Link reservations, the file ID, and an object-key hash remain. A deleted URL stays inactive. Start a new upload group to reuse a path after Trash or deletion. Restore fails while another active file uses that path; move the active file to Trash first.
 
 ## Larger files

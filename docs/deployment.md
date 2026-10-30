@@ -78,6 +78,8 @@ cp instance.example.json "$HOME/.config/dropshelf/demo/instance.json"
 
 Edit that copied file. Set the account ID, bucket, exact app and content origins, Access team domain, and AUD tag. Change `appName` to set the name shown in the UI. Set `allowedFileTypes` to the allowed extensions and MIME types, such as `image/*,.html,.htm,.md,.markdown,.csv,.pdf,.css,.js`. This becomes the `ALLOWED_FILE_TYPES` Worker variable. The two Worker names are `name` and `name-content`.
 
+Set `fileRetentionDays` and `trashRetentionDays` for automatic expiry. The defaults are `30` and `7`. Use whole days from `1` to `36500`, or `0` to disable either step. These values become `FILE_RETENTION_DAYS` and `TRASH_RETENTION_DAYS`. A root file or top-level folder moves to Trash after the first period. Files are deleted after the second period starts at the move to Trash. See [automatic expiry](../README.md#automatic-expiry) for folder and restore rules.
+
 Generate deployment files:
 
 ```sh
@@ -85,6 +87,8 @@ npm run setup -- --input "$HOME/.config/dropshelf/demo/instance.json" --out "$HO
 ```
 
 This creates `app.jsonc` and `content.jsonc`. Both point to the local source and built assets. The app configuration defines the SQLite Durable Object. The content configuration binds to that object in the app Worker. They contain deployment settings, and they stay outside Git. They clear the local test identity and disable Worker preview URLs.
+
+Only the app configuration has the hourly Cron Trigger, `0 * * * *`. The content Worker does not need its own schedule. Keep schedule changes in the generated app configuration or setup script. Cloudflare can take up to 15 minutes to apply a schedule change. See [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/).
 
 ## 6. Deploy
 
@@ -135,6 +139,8 @@ Keep the same R2 bucket, app Worker name, Durable Object class (`Shelf`), and ob
 
 For an existing Durable Object instance, the folder merge update preserves file records and URLs. Schema version 2 adds shared paths and replacement records. If older groups contain the same active file path, the first file keeps its name and later copies get a ` (copy 2)` suffix or the next free number. All original links and bytes stay available. Deploy the app Worker first, then the content Worker.
 
+Schema version 3 adds the restore date used for expiry. Existing upload and Trash dates stay unchanged. Before enabling expiry, review both periods: they apply to existing files and Trash. Generate the instance configuration again to add the retention variables and hourly schedule. Missing retention variables disable the corresponding step; invalid values stop the job. Changing a period does not reset file dates.
+
 The earlier move from D1 to Durable Objects did not copy D1 records or remove old resources. An instance still using D1 needs a separate migration for any data it must keep.
 
 Check file name search, type and author filters, and selection across pages. Check that **Delete all** shows the full Trash count when filters hide files. Do not confirm this action against files you need.
@@ -145,6 +151,10 @@ Use Durable Object SQLite point-in-time recovery for metadata recovery. See [Clo
 
 New uploads use write reservations that expire after 30 minutes. A Durable Object alarm removes expired reservations and retired objects. Completed writes keep a receipt for 24 hours to handle a lost response. Ready file records are the file list's source of truth. Check older incomplete records or orphan objects before removal; never remove objects linked to ready records. Replaced contents are not a backup and cannot be recovered from Trash.
 
-Trash has no automatic retention job. If permanent deletion starts but R2 or the metadata update fails, the file stays in a pending state in Trash and cannot be restored. Retry permanent deletion to finish it. Do not clear that state manually: the stored bytes may already be gone. A metadata backup cannot restore bytes removed from R2.
+The app Worker checks expiry every hour. The job moves each due root file or top-level folder to Trash, then claims up to 100 due Trash files for permanent deletion. It also retries pending deletions. A larger backlog requires more runs. Check the `retention_completed` log counts (`trashed`, `deleted`, and `failed`) and the Cron Trigger event status. A deletion failure makes the scheduled event fail after it attempts the remaining files in that batch.
+
+If permanent deletion starts but R2 or the metadata update fails, the file stays pending in Trash and cannot be restored. The next scheduled run retries it, even if the automatic deletion period was disabled after deletion started. A manual retry also works. Do not clear that state manually: the stored bytes may already be gone. A metadata backup cannot restore bytes removed from R2.
+
+For a local schedule check, run `npm run dev -- --test-scheduled`, then request `http://localhost:8787/cdn-cgi/local/scheduled?cron=0+*+*+*+*`. This runs against the local shelf. Do not add an HTTP cleanup endpoint to the deployed app.
 
 To end an instance, first remove team access. Export data you need, then remove only that instance's Workers and resources. Shared resources from other instances must stay separate.

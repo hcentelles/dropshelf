@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_ALLOWED_FILE_TYPES, parseAllowedFileTypes } from '../shared/formats.ts';
+import { DEFAULT_FILE_RETENTION_DAYS, DEFAULT_TRASH_RETENTION_DAYS, parseRetentionDays } from '../shared/retention.ts';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -59,6 +60,8 @@ try {
   const maxBytes = config.maxFileBytes ?? 104857600;
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 104857600) throw new Error('Use a file limit from 1 byte to 100 MiB.');
   const allowed = parseAllowedFileTypes(config.allowedFileTypes ?? DEFAULT_ALLOWED_FILE_TYPES).join(',');
+  const fileDays = parseRetentionDays(config.fileRetentionDays ?? DEFAULT_FILE_RETENTION_DAYS, 'fileRetentionDays');
+  const trashDays = parseRetentionDays(config.trashRetentionDays ?? DEFAULT_TRASH_RETENTION_DAYS, 'trashRetentionDays');
   const appName = config.appName ?? 'Drop Shelf';
   if (typeof appName !== 'string' || !appName.trim() || appName.length > 100) throw new Error('The appName value is not valid.');
   const labels = config.serviceTokenLabels ?? {};
@@ -80,12 +83,14 @@ try {
       ACCESS_TEAM_DOMAIN: teamDomain, ACCESS_AUD: aud, LOCAL_DEV_EMAIL: '',
       SERVICE_TOKEN_LABELS: JSON.stringify(labels), MAX_FILE_BYTES: String(maxBytes),
       ALLOWED_FILE_TYPES: allowed,
+      FILE_RETENTION_DAYS: String(fileDays), TRASH_RETENTION_DAYS: String(trashDays),
     },
     r2_buckets: [{ binding: 'FILES', bucket_name: bucket }],
   };
   for (const [file, workerName] of [['app.jsonc', name], ['content.jsonc', `${name}-content`]]) {
     const path = resolve(outputPath, file);
     const store = file === 'app.jsonc' ? {
+      triggers: { crons: ['0 * * * *'] },
       durable_objects: { bindings: [{ name: 'SHELF', class_name: 'Shelf' }] },
       exports: { Shelf: { type: 'durable-object', storage: 'sqlite' } },
     } : {

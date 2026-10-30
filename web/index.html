@@ -46,6 +46,7 @@
         <input type="file" id="file-input" multiple hidden />
         <input type="file" id="folder-input" webkitdirectory multiple hidden />
       </section>
+      <p class="upload-limit" id="retention-note" hidden></p>
       <div class="upload-progress" id="upload-progress" hidden><span id="progress-text"></span><progress id="progress" value="0" max="100" aria-label="Upload progress"></progress></div>
       <section class="notice" id="notice" hidden role="status" aria-live="polite"><i class="ph ph-check-circle" id="notice-icon" aria-hidden="true"></i><span id="notice-text"></span><button class="button" id="copy-new" hidden></button><button class="icon-button" id="dismiss-notice" aria-label="Dismiss message"><i class="ph ph-x" aria-hidden="true"></i></button></section>
       <section class="files-section" aria-labelledby="files-heading">
@@ -73,7 +74,7 @@
       <section id="trash-view" aria-labelledby="trash-heading" hidden>
         <a class="back-link" href="#"><i class="ph ph-arrow-left" aria-hidden="true"></i> Back to files</a>
         <div class="page-heading-row"><div class="page-heading"><h1 id="trash-heading" tabindex="-1">Trash</h1><p>Restore files or delete them permanently.</p></div><button class="button danger-outline" id="trash-delete-all" disabled><i class="ph ph-trash" aria-hidden="true"></i> <span>Delete all</span></button></div>
-        <p class="trash-note"><i class="ph ph-info" aria-hidden="true"></i> Files stay here until a team member restores or permanently deletes them. Shared links are inactive while files are in Trash.</p>
+        <p class="trash-note"><i class="ph ph-info" aria-hidden="true"></i> <span id="trash-retention-note">Shared links are inactive while files are in Trash.</span></p>
         <section class="files-section" aria-labelledby="trash-files-heading">
           <nav class="breadcrumbs" id="trash-breadcrumbs" aria-label="Trash folder path" hidden></nav>
           <div class="list-heading"><div><h2 id="trash-files-heading">Files in Trash</h2><p id="trash-file-count">Loading files…</p></div><label class="sort-control"><i class="ph ph-arrows-down-up" aria-hidden="true"></i><span class="sr-only">Sort Trash files</span><select id="trash-sort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Name A–Z</option></select></label></div>

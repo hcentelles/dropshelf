@@ -6,6 +6,8 @@ import { queryFileFilters, queryFiles } from './file-query';
 import { cleanPath, HttpError } from './http';
 import { initializeSchema } from './schema';
 import { UploadStore } from './upload-store';
+import { retentionPolicy } from '../shared/retention';
+import { beginExpiredDeletion, moveExpiredToTrash } from './retention-store';
 
 // One object owns the metadata and live connections for one private shelf.
 // The Workers stream file bodies directly to and from R2.
@@ -60,6 +62,18 @@ export class Shelf extends DurableObject<Env> {
   releaseUpload(id: string): void { this.uploads.release(id); }
   async alarm(): Promise<void> { await this.uploads.cleanup(); }
 
+  expireFiles(): number {
+    const count = moveExpiredToTrash(this.ctx.storage, retentionPolicy(this.env).fileDays, Date.now());
+    if (count) this.#broadcast();
+    return count;
+  }
+
+  beginExpiredDeletion() {
+    const files = beginExpiredDeletion(this.ctx.storage, retentionPolicy(this.env).trashDays, Date.now());
+    if (files.length) this.#broadcast();
+    return files;
+  }
+
   async findContent(uploadId: string, value: string): Promise<FileRow> {
     const path = cleanPath(value);
     const sql = this.ctx.storage.sql;
@@ -99,8 +113,8 @@ export class Shelf extends DurableObject<Env> {
   restoreFile(id: string): SharedFile {
     this.uploads.assertRestorable(this.#file(id));
     const row = this.ctx.storage.sql.exec<FileRow>(`UPDATE files
-      SET status = 'ready', trashed_at = NULL, trashed_by_id = NULL, trashed_by_label = NULL
-      WHERE id = ? AND status = 'trashed' AND delete_started_at IS NULL RETURNING *`, id).toArray()[0];
+      SET status = 'ready', trashed_at = NULL, trashed_by_id = NULL, trashed_by_label = NULL, restored_at = ?
+      WHERE id = ? AND status = 'trashed' AND delete_started_at IS NULL RETURNING *`, Date.now(), id).toArray()[0];
     if (row) { this.#broadcast(); return present(row, this.env); }
     const file = this.getFile(id);
     if (file.deletionPending) throw new HttpError(409, 'Permanent deletion has started. This file cannot be restored.');

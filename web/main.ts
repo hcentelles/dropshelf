@@ -168,6 +168,13 @@ async function boot(): Promise<void> {
     folderInput.accept = config.allowedFileTypes.join(',');
     element('supported-types').textContent = `${describeAllowedTypes(config.allowedFileTypes)}. Other files are skipped.`;
     updateUploadDestination();
+    const { fileDays, trashDays } = config.retention;
+    const period = (days: number) => `${days} ${days === 1 ? 'day' : 'days'}`;
+    element('retention-note').hidden = !fileDays;
+    element('retention-note').textContent = `Files and folders move to Trash ${period(fileDays)} after their last upload, replacement, or restore.`;
+    element('trash-retention-note').textContent = (trashDays
+      ? `Files are deleted permanently after ${period(trashDays)} in Trash. `
+      : 'Automatic deletion is off. ') + 'Shared links are inactive while files are in Trash.';
     updateMcpSetup(config);
     setUploadEnabled(true);
     initLiveUpdates(() => { activeFiles.requestLiveUpdate(); trash.requestLiveUpdate(); });

@@ -102,4 +102,12 @@ export function initializeSchema(storage: DurableObjectStorage): void {
       `);
     });
   }
+  if (version < 3) {
+    storage.transactionSync(() => {
+      sql.exec(`
+        ALTER TABLE files ADD COLUMN restored_at INTEGER;
+        INSERT INTO schema_migrations (version) VALUES (3);
+      `);
+    });
+  }
 }

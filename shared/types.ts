@@ -1,3 +1,5 @@
+import type { RetentionPolicy } from './retention';
+
 export interface Principal {
   id: string;
   email: string | null;
@@ -67,4 +69,5 @@ export interface AppConfig {
   allowedFileTypes: string[];
   mcpUrl: string;
   local: boolean;
+  retention: RetentionPolicy;
 }

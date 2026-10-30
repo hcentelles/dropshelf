@@ -9,6 +9,8 @@ import { getFileFilters, listExplorer } from './files';
 import { shelf } from './shelf-client';
 import { manageFiles } from './bulk';
 import type { BulkAction } from '../shared/types';
+import { retentionPolicy } from '../shared/retention';
+import { runRetention } from './retention';
 export { Shelf } from './shelf';
 
 async function route(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -36,7 +38,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
     }
     if (url.pathname === '/api/config' && request.method === 'GET') {
       return json({ name: env.APP_NAME, user, maxFileBytes: maxFileBytes(env), allowedFileTypes: allowedFileTypes(env),
-        mcpUrl: `${app.origin}/mcp`, local: isLoopback(url.hostname) } satisfies AppConfig);
+        mcpUrl: `${app.origin}/mcp`, local: isLoopback(url.hostname), retention: retentionPolicy(env) } satisfies AppConfig);
     }
     if ((url.pathname === '/api/files' || url.pathname === '/api/explorer') && request.method === 'GET') {
       const list = url.pathname === '/api/explorer' ? listExplorer : listFiles;
@@ -125,6 +127,11 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
 }
 
 export default {
+  async scheduled(_controller, env) {
+    const result = await runRetention(env);
+    console.log(JSON.stringify({ event: 'retention_completed', ...result }));
+    if (result.failed) throw new Error(`Retention could not delete ${result.failed} files. The next run will retry them.`);
+  },
   async fetch(request, env, ctx) {
     try { return secureResponse(await route(request, env, ctx)); }
     catch (error) {

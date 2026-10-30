@@ -31,7 +31,8 @@ it('upgrades existing metadata, preserves duplicate contents and every old URL, 
     trashedId, records[1]!.uploadId, `${records[1]!.uploadId}/site/index (copy 2).html`);
     initializeSchema(state.storage);
     initializeSchema(state.storage);
-    expect(sql.exec('SELECT version FROM schema_migrations ORDER BY version').toArray()).toEqual([{ version: 1 }, { version: 2 }]);
+    expect(sql.exec('SELECT version FROM schema_migrations ORDER BY version').toArray()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+    expect(sql.exec('SELECT restored_at FROM files WHERE restored_at IS NOT NULL').toArray()).toEqual([]);
     expect(sql.exec('SELECT id FROM files').toArray()).toHaveLength(5);
     expect(sql.exec('SELECT path FROM files GROUP BY path').toArray()).toHaveLength(5);
   });

@@ -16,6 +16,7 @@ A private file shelf for teams. Drop files or folders, then copy links that open
 - Select files across pages. Copy their links, move them to Trash, restore them, or delete them permanently.
 - Open or download each file through a stable, protected URL.
 - Move files to Trash, restore their original links, and delete files permanently from Trash.
+- Move old files and folders to Trash automatically, then delete them after a separate Trash period. Configure both periods for each instance.
 - Use email codes to sign in with Cloudflare Access.
 - Give agents the same file service through a remote MCP server.
 - Run separate instances from one codebase.
@@ -108,15 +109,28 @@ The [MCP guide](docs/mcp.md) includes authentication, tool examples, larger uplo
 
 ## Trash
 
-Open a file's options menu and select **Move to Trash**. Open **Trash** from the account menu to restore it or select **Delete permanently**. Permanent deletion requires a confirmation and only works on files already in Trash.
+Open a file's options menu and select **Move to Trash**. Open **Trash** from the account menu to restore it or select **Delete permanently**. Manual permanent deletion requires a confirmation and only works on files already in Trash.
 
 Use the checkboxes for bulk actions. The header checkbox selects loaded items. **Select all** includes all pages at the current folder level for the current search and filters. A selected folder includes all files below it, including files hidden by a filter. Changing a filter or leaving the view clears the selection.
 
 In Trash, **Delete all** collects every file across all pages, including files hidden by filters. The confirmation shows the captured count. Files added after that step are excluded. A failed deletion can be retried for only the files that failed.
 
-Any approved team member can manage Trash. Service identities use the same rules. Files in Trash stop serving content and previews, but keep their stored bytes until permanent deletion. Restore keeps the original path, uploader, date, and URL. Files have no automatic expiry in Trash.
+Any approved team member can manage Trash. Service identities use the same rules. Files in Trash stop serving content and previews, but keep their stored bytes until permanent deletion. Restore keeps the original path, uploader, upload dates, and URL. It starts a new active retention period.
 
 Permanent deletion removes the R2 object and file record. Link reservations, the file ID, and an object-key hash remain to make retries safe and prevent reuse of a deleted URL. To upload a new file at the same path after moving a file to Trash, start a new upload group. Restore is blocked while another active file uses that path.
+
+## Automatic expiry
+
+The default settings move files to Trash after **30 days**, then delete them permanently after **7 days in Trash**. An hourly job runs on the app Worker, including when no browser is open. Actions occur on the next successful check after each period ends.
+
+- A file at the root uses its last completed upload, replacement, or restore date. Opening, downloading, or previewing a file does not extend its life.
+- A top-level folder is one expiry group. Its date is the latest upload, replacement, or restore among its active files, including nested folders and files from other upload groups. The whole group moves to Trash together. A pending upload blocks expiry for that group. This keeps HTML pages and their assets together.
+- The Trash period starts at the actual move to Trash, including a manual move. An old file still gets the full Trash period. Files in Trash are then deleted by their own Trash dates.
+- Restore starts a full new active period. Upload dates and links stay unchanged. Repeated restore calls for an already active file do not extend the period.
+
+Set `fileRetentionDays` and `trashRetentionDays` in the private instance file, generate the deployment configuration again, and redeploy. These become `FILE_RETENTION_DAYS` and `TRASH_RETENTION_DAYS`. Use whole days from `1` to `36500`, or `0` to disable a step. Missing Worker variables disable that step for older deployments. Invalid values stop the job before it changes data.
+
+Configuration changes apply to existing files and Trash. Reducing a period can make existing items due at the next check. The job deletes at most 100 files per run; a larger backlog can take more than one run. Failed deletions stay pending and retry on the next run. Deletions that already started also retry if automatic deletion is later disabled.
 
 ## Live updates
 
