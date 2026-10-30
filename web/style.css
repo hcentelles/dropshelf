@@ -53,6 +53,7 @@ h1, h2, h3, p { margin: 0; }
 h1 { font-size: 32px; line-height: 1.25; letter-spacing: -1px; font-weight: 650; text-wrap: balance; }
 .page-heading p { font-size: 15px; margin-top: 6px; color: var(--muted); text-wrap: pretty; }
 .page-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+#files-view > .page-heading-row { gap: clamp(16px, 4vw, 48px); }
 .page-heading { min-width: 0; }
 .page-heading-row > .button { color: var(--text-secondary); }
 .drop-zone { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 24px; min-height: 142px; padding: 26px; border: 1px dashed var(--border-strong); border-radius: 14px; background: var(--surface-subtle); text-align: left; }
@@ -266,6 +267,11 @@ tr.is-selected { background: var(--accent-bg); }
   .page-heading-row { gap: 8px; align-items: flex-start; }
   .page-heading-row > .button { font-size: 12px; padding: 8px 10px; flex-shrink: 0; }
   .page-heading-row .page-heading p { font-size: 13px; }
+  #files-view > .page-heading-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
+  #files-view > .page-heading-row .page-heading { display: contents; }
+  #files-page-heading { grid-column: 1; grid-row: 1; align-self: center; }
+  #files-page-heading + p { grid-column: 1 / -1; grid-row: 2; margin-top: 0; }
+  #connect-mcp { grid-column: 2; grid-row: 1; }
   .drop-zone { min-height: 0; flex-direction: column; align-items: stretch; gap: 18px; padding: 20px 16px; margin-top: 20px; }
   .upload-copy { align-items: flex-start; gap: 12px; }
   .upload-icon { width: 42px; height: 42px; font-size: 25px; border-radius: 10px; }
