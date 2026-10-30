@@ -8,7 +8,7 @@ export async function manageFiles(env: Env, user: Principal, action: BulkAction,
     throw new HttpError(400, `Send from 1 to ${MAX_BULK_FILES} unique file IDs and a valid action.`);
   }
   if (action === 'delete' && confirm !== true) throw new HttpError(400, 'Confirm permanent deletion with confirm: true.');
-  const results: BulkResult['results'] = new Array(ids.length);
+  const results: BulkResult['results'] = [];
   let next = 0;
   const run = async () => {
     while (next < ids.length) {

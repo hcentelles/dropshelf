@@ -53,6 +53,7 @@ export function checkBrowserOrigin(request: Request, appOrigin: string): void {
 
 export function cleanPath(input: string): string {
   const path = input.normalize('NFC');
+  // oxlint-disable-next-line no-control-regex -- Reject control characters in uploaded file paths.
   if (!path || path.length > 1024 || /[\\\u0000-\u001f\u007f]/.test(path) || path.startsWith('/')) {
     throw new HttpError(400, 'Use a relative file path.');
   }

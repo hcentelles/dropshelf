@@ -113,7 +113,7 @@ export async function uploadFiles(
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
   });
   const totalBytes = approved.reduce((sum, entry) => sum + entry.item.file.size, 0);
-  const bytes = new Array<number>(approved.length).fill(0);
+  const bytes = Array.from({ length: approved.length }, () => 0);
   let next = 0;
   let complete = 0;
   const progress = () => { onProgress(complete, approved.length, bytes.reduce((sum, n) => sum + n, 0), totalBytes); };

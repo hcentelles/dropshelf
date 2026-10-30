@@ -13,11 +13,12 @@ On a Linux machine that lacks browser system libraries, use `npx playwright inst
 
 | Command | Checks |
 | --- | --- |
+| `npm run lint` | JavaScript and TypeScript correctness rules through Oxlint |
 | `npm test` | Unit and integration tests inside the Workers runtime |
 | `npm run test:e2e` | Build the UI, then run browser and MCP end-to-end tests |
 | `npm run test:e2e:web` | Build the UI, then run Chromium tests |
 | `npm run test:e2e:mcp` | Build the UI, then run MCP SDK tests over local HTTP |
-| `npm run check` | TypeScript, UI build, runtime tests, and both end-to-end suites |
+| `npm run check` | Lint, TypeScript, UI build, runtime tests, and both end-to-end suites |
 | `npm run test:e2e:report` | Open the last HTML test report |
 
 Pass Playwright options after `--`:
@@ -31,6 +32,20 @@ npm run test:e2e -- --project=web --ui
 ```
 
 The runner builds once before the tests. In Playwright UI mode, exit and run the command again after a source change to rebuild the app.
+
+## GitHub Actions
+
+The `Check` workflow in `.github/workflows/check.yml` runs on every push and pull request, with no branch or path filters. You can also start it from the Actions page. A new run cancels an older run for the same event and branch.
+
+The job uses Ubuntu 24.04, Node.js 24, and `npm ci`. It runs lint, TypeScript checks, the production UI build, unit and Worker integration tests, a production dependency audit, and both Playwright projects. It installs Chromium and its Linux libraries before E2E tests start.
+
+Oxlint checks the JavaScript and TypeScript source, scripts, and tests. It follows `.gitignore` and excludes generated Worker declarations. Warnings fail the check. TypeScript remains responsible for type checks.
+
+E2E tests use the same fixtures and temporary local R2 and SQLite storage as local runs. Each test worker starts its own local server. The workflow needs no Cloudflare account, deployment secrets, or existing shelf. Its GitHub token has read-only repository access. Actions are pinned to commit IDs.
+
+The E2E suite has a five-minute total limit. The job has a fifteen-minute limit, which leaves time for installation and report upload. Normal teardown removes test storage. The hosted runner is discarded after the job.
+
+Download the `playwright-results` artifact from a run to inspect its HTML report, traces, failure screenshots, and Worker output. Reports are uploaded after success or failure and retained for seven days. Cancelled runs can end before report upload.
 
 ## Local services and isolation
 

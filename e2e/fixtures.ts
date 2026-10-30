@@ -101,6 +101,7 @@ interface TestFixtures {
 }
 
 export const test = base.extend<TestFixtures, { app: LocalApp }>({
+  // oxlint-disable-next-line no-empty-pattern -- Playwright requires object destructuring for fixture arguments.
   app: [async ({}, use) => {
     const app = await startLocalApp();
     try { await use(app); }

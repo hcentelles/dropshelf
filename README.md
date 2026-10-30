@@ -55,7 +55,9 @@ npm run test:e2e:install
 npm run check
 ```
 
-The checks include TypeScript, a production UI build, tests in the Workers runtime, and local end-to-end tests for the browser and MCP. Install the test browser once after `npm ci`, and again after a Playwright update.
+The checks include JavaScript and TypeScript lint, TypeScript checks, a production UI build, tests in the Workers runtime, and local end-to-end tests for the browser and MCP. Install the test browser once after `npm ci`, and again after a Playwright update.
+
+GitHub Actions runs these checks and a production dependency audit on every push and pull request. It uses the same local test fixtures and temporary storage. The run retains E2E reports and failure details for 7 days. See the [testing guide](docs/testing.md#github-actions).
 
 ## Local end-to-end tests
 
