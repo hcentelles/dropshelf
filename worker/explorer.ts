@@ -11,6 +11,9 @@ type EntryRow = FileRow & {
   entry_size: number;
   file_count: number;
   entry_created: number;
+  entry_updated: number;
+  entry_uploader: string;
+  entry_source: 'web' | 'mcp';
   entry_trashed: number | null;
   entry_actor: string | null;
   entry_pending: number;
@@ -24,7 +27,7 @@ export function queryExplorer(sql: SqlStorage, env: Env, cursor: string | null, 
   if (!['newest', 'oldest', 'name'].includes(sort)) throw new HttpError(400, 'Use newest, oldest, or name for sorting.');
   const scope = normalizeScope(input);
   const filters = normalize(input);
-  const key = JSON.stringify([scope.uploadId, scope.folder, filters.q, filters.type, filters.author, sort]);
+  const key = JSON.stringify([scope.folder, filters.q, filters.type, filters.author, sort]);
   const { where, params, prefix } = scopedWhere(view, scope);
   const matches: string[] = [];
   const matchParams: string[] = [];
@@ -48,15 +51,18 @@ export function queryExplorer(sql: SqlStorage, env: Env, cursor: string | null, 
         THEN substr(relative_path, 1, instr(relative_path, '/') - 1) ELSE name END AS entry_name
     FROM scoped
   ), tagged AS (
-    SELECT *, CASE WHEN folder_rank = 0 THEN 'folder:' || upload_id || ':' || ? || entry_name ELSE id END AS entry_id,
+    SELECT *, CASE WHEN folder_rank = 0 THEN 'folder:' || ? || entry_name ELSE id END AS entry_id,
       ? || entry_name AS entry_path, CASE WHEN ${matches.join(' AND ') || '1'} THEN 1 ELSE 0 END AS matches
     FROM named
   ), grouped AS (
     SELECT entry_id, entry_name, entry_path, folder_rank, MIN(id) AS record_id,
       SUM(size) AS entry_size, COUNT(*) AS file_count, MAX(created_at) AS entry_created,
+      MAX(COALESCE(NULLIF(updated_at, 0), created_at)) AS entry_updated,
+      CASE WHEN COUNT(DISTINCT uploader_id) > 1 THEN 'Multiple users' ELSE MAX(uploader_label) END AS entry_uploader,
+      CASE WHEN COUNT(DISTINCT source) > 1 THEN 'web' ELSE MAX(source) END AS entry_source,
       MAX(trashed_at) AS entry_trashed, MAX(delete_started_at IS NOT NULL) AS entry_pending,
       CASE WHEN COUNT(DISTINCT trashed_by_id) > 1 THEN 'Multiple users' ELSE MAX(trashed_by_label) END AS entry_actor,
-      MAX(${view === 'trash' ? 'trashed_at' : 'created_at'}) AS entry_date, MAX(matches) AS matches
+      MAX(${view === 'trash' ? 'trashed_at' : 'COALESCE(NULLIF(updated_at, 0), created_at)'}) AS entry_date, MAX(matches) AS matches
     FROM tagged GROUP BY entry_id
   )`;
   const bindings = [prefix, ...params, prefix, prefix, ...matchParams];
@@ -84,9 +90,9 @@ export function queryExplorer(sql: SqlStorage, env: Env, cursor: string | null, 
   const last = page.at(-1);
   return {
     entries: page.map(row => row.folder_rank === 1 ? present(row, env) : {
-      kind: 'folder', id: row.entry_id, uploadId: row.upload_id, path: row.entry_path, name: row.entry_name,
-      size: row.entry_size, fileCount: row.file_count, uploaderLabel: row.uploader_label, source: row.source,
-      createdAt: row.entry_created, trashedAt: row.entry_trashed, trashedBy: row.entry_actor,
+      kind: 'folder', id: row.entry_id, path: row.entry_path, name: row.entry_name,
+      size: row.entry_size, fileCount: row.file_count, uploaderLabel: row.entry_uploader, source: row.entry_source,
+      createdAt: row.entry_created, updatedAt: row.entry_updated, trashedAt: row.entry_trashed, trashedBy: row.entry_actor,
       deletionPending: !!row.entry_pending,
     } satisfies SharedFolder),
     total: count?.total ?? 0,

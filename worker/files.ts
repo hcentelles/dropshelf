@@ -1,10 +1,11 @@
 import { acceptFile } from '../shared/formats';
-import type { ExplorerPage, FileFilterOptions, FilePage, FileQuery, FileScope, FileView, Principal, SharedFile } from '../shared/types';
+import type { ExplorerPage, FileFilterOptions, FilePage, FileQuery, FileScope, FileView, Principal, ReplaceFile, SharedFile, UploadCheck } from '../shared/types';
 import type { FileRow } from './file-record';
 import { allowedFileTypes, cleanPath, HttpError, maxFileBytes } from './http';
 import { shelf } from './shelf-client';
 
 export async function createUpload(env: Env, user: Principal): Promise<string> { return shelf(env).createUpload(user); }
+export async function checkUploads(env: Env, paths: string[]): Promise<UploadCheck[]> { return shelf(env).checkUploads(paths); }
 export async function getFile(env: Env, id: string): Promise<SharedFile> { return shelf(env).getFile(id); }
 export async function listFiles(env: Env, cursor: string | null, limit = 30, view: FileView = 'files', input: FileQuery = {}): Promise<FilePage> {
   return shelf(env).listFiles(cursor, limit, view, input);
@@ -23,6 +24,7 @@ interface UploadInput {
   size: number;
   body: ReadableStream<Uint8Array> | Uint8Array;
   source: 'web' | 'mcp';
+  replace?: ReplaceFile;
 }
 
 export async function uploadFile(env: Env, user: Principal, input: UploadInput): Promise<SharedFile> {
@@ -32,8 +34,11 @@ export async function uploadFile(env: Env, user: Principal, input: UploadInput):
   if (!Number.isSafeInteger(input.size) || input.size < 0 || input.size > maxFileBytes(env)) {
     throw new HttpError(413, 'The file exceeds the size limit.');
   }
+  if (input.body instanceof Uint8Array && input.body.byteLength !== input.size) {
+    throw new HttpError(400, 'The file size does not match its contents.');
+  }
   const store = shelf(env);
-  const row = await store.reserveUpload(user, { uploadId: input.uploadId, path, contentType, size: input.size, source: input.source });
+  const row = await store.reserveUpload(user, { uploadId: input.uploadId, path, contentType, size: input.size, source: input.source, replace: input.replace });
   try {
     if (input.body instanceof Uint8Array) {
       await env.FILES.put(row.object_key, input.body, { httpMetadata: { contentType } });
@@ -58,7 +63,10 @@ export async function uploadFile(env: Env, user: Principal, input: UploadInput):
         await env.FILES.delete(abortedKey);
         await store.releaseUpload(row.id);
       }
-      else return await store.getFile(row.id);
+      else {
+        const completed = await store.completedUpload(row.id);
+        if (completed) return completed;
+      }
     } catch {
       console.error(JSON.stringify({ event: 'upload_cleanup_failed', fileId: row.id }));
     }

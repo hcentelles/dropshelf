@@ -41,7 +41,7 @@ it('keeps metadata, owner checks, Trash, and deletion records after the object r
   await expect(uploadFile(env, { ...user, id: 'other-user' }, input(uploadId, 'other.html'))).rejects.toMatchObject({ status: 403 });
   await expect(uploadFile(env, user, input(uploadId, deleted.path))).rejects.toMatchObject({ status: 409 });
   expect(await deleteFilePermanently(env, deleted.id, true)).toEqual({ id: deleted.id, deleted: true });
-  expect(await database(sql => sql.exec('SELECT version FROM schema_migrations').toArray())).toEqual([{ version: 1 }]);
+  expect(await database(sql => sql.exec('SELECT version FROM schema_migrations').toArray())).toEqual([{ version: 1 }, { version: 2 }]);
 });
 
 it('notifies two pages after HTTP and MCP changes, including after hibernation', async () => {
@@ -114,7 +114,7 @@ it('does not remove completed file bytes after the completion response is lost',
       reserveUpload: async (owner: Principal, metadata: UploadMetadata) => stub.reserveUpload(owner, metadata),
       completeUpload: async (id: string) => { await stub.completeUpload(id); throw new Error('Lost response'); },
       abortUpload: async (id: string) => stub.abortUpload(id),
-      getFile: async (id: string) => stub.getFile(id),
+      completedUpload: async (id: string) => stub.completedUpload(id),
     }),
   } as unknown as Env['SHELF'] };
   const file = await uploadFile(failingEnv, user, input(uploadId));

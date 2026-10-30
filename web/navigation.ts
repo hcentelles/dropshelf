@@ -10,15 +10,15 @@ export function currentSection(): Section {
 
 export function currentScope(): FileScope {
   const query = new URLSearchParams(window.location.hash.split('?')[1]);
-  return { uploadId: query.get('uploadId') ?? '', folder: query.get('folder') ?? '' };
+  return { folder: query.get('folder') ?? '' };
 }
 
 export function folderHref(view: FileView, scope: FileScope = {}): string {
-  return scope.folder ? `#${view}?${new URLSearchParams({ uploadId: scope.uploadId ?? '', folder: scope.folder })}` : view === 'files' ? '#' : '#trash';
+  return scope.folder ? `#${view}?${new URLSearchParams({ folder: scope.folder })}` : view === 'files' ? '#' : '#trash';
 }
 
 export function entryUrl(entry: ShelfEntry, view: FileView = 'files'): string {
-  return isFolder(entry) ? `${window.location.origin}/${folderHref(view, { uploadId: entry.uploadId, folder: entry.path })}` : entry.url;
+  return isFolder(entry) ? `${window.location.origin}/${folderHref(view, { folder: entry.path })}` : entry.url;
 }
 
 export function renderBreadcrumbs(node: HTMLElement, view: FileView, scope: FileScope): void {
@@ -30,7 +30,7 @@ export function renderBreadcrumbs(node: HTMLElement, view: FileView, scope: File
     if (index) { const separator = document.createElement('span'); separator.textContent = '/'; separator.setAttribute('aria-hidden', 'true'); node.append(separator); }
     const item = document.createElement(index === labels.length - 1 ? 'span' : 'a');
     item.textContent = label;
-    if (item instanceof HTMLAnchorElement) item.href = folderHref(view, { uploadId: scope.uploadId, folder: parts.slice(0, index).join('/') });
+    if (item instanceof HTMLAnchorElement) item.href = folderHref(view, { folder: parts.slice(0, index).join('/') });
     else item.setAttribute('aria-current', 'page');
     node.append(item);
   });

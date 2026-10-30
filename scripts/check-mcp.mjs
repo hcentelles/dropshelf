@@ -86,7 +86,7 @@ try {
   client = new Client({ name: 'dropshelf-deployment-check', version: '0.1.0' });
   await client.connect(transport);
   const tools = await client.listTools();
-  for (const name of ['upload_file', 'trash_file', 'restore_file', 'delete_file_permanently', 'get_file_filters', 'trash_files', 'restore_files', 'delete_files_permanently']) {
+  for (const name of ['upload_file', 'check_uploads', 'trash_file', 'restore_file', 'delete_file_permanently', 'get_file_filters', 'trash_files', 'restore_files', 'delete_files_permanently']) {
     assert.ok(tools.tools.some(tool => tool.name === name), `The server must expose ${name}.`);
   }
   async function call(name, args = {}) {
@@ -111,12 +111,16 @@ try {
   console.log('PASS: MCP SDK connection, tool discovery, verified identity, file listing, search, and filters.');
   if (write) {
     const { uploadId } = await call('create_upload');
+    const folder = `mcp-check-${uploadId}`;
     const html = await readFile(new URL('../tests/fixtures/site/index.html', import.meta.url), 'utf8');
     const svg = await readFile(new URL('../tests/fixtures/site/images/sample.svg', import.meta.url), 'utf8');
     const markdown = await readFile(new URL('../tests/fixtures/site/notes.md', import.meta.url), 'utf8');
-    const file = await call('upload_file', { uploadId, path: 'mcp-check/index.html', content: html });
-    const image = await call('upload_file', { uploadId, path: 'mcp-check/images/sample.svg', content: svg });
-    const notes = await call('upload_file', { uploadId, path: 'mcp-check/notes.md', content: markdown });
+    const file = await call('upload_file', { uploadId, path: `${folder}/index.html`, content: html });
+    const image = await call('upload_file', { uploadId, path: `${folder}/images/sample.svg`, content: svg });
+    const notes = await call('upload_file', { uploadId, path: `${folder}/notes.md`, content: markdown });
+    const [checked] = await call('check_uploads', { paths: [file.path] });
+    assert.equal(checked.existing.id, file.id);
+    assert.equal(checked.existing.version, 1);
     assert.equal(file.uploaderEmail, identity.email);
     assert.equal(file.source, 'mcp');
     const content = await fetch(file.url, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -131,7 +135,7 @@ try {
     const rawHeaders = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
     const group = await getJson(`${target.origin}/api/uploads`, { method: 'POST', headers: rawHeaders, body: '{}' });
     const csv = 'name,status\nOAuth,verified\n';
-    const uploaded = await getJson(`${target.origin}/api/uploads/${group.uploadId}?path=oauth-check.csv`, {
+    const uploaded = await getJson(`${target.origin}/api/uploads/${group.uploadId}?path=${folder}/oauth-check.csv`, {
       method: 'PUT', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'text/csv',
         'Content-Length': String(Buffer.byteLength(csv)) }, body: csv,
     });

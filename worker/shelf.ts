@@ -5,13 +5,16 @@ import { objectKeyHash, present, type FileRow, type UploadMetadata } from './fil
 import { queryFileFilters, queryFiles } from './file-query';
 import { cleanPath, HttpError } from './http';
 import { initializeSchema } from './schema';
+import { UploadStore } from './upload-store';
 
 // One object owns the metadata and live connections for one private shelf.
 // The Workers stream file bodies directly to and from R2.
 export class Shelf extends DurableObject<Env> {
+  private uploads: UploadStore;
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     initializeSchema(ctx.storage);
+    this.uploads = new UploadStore(ctx.storage, env);
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
 
@@ -45,47 +48,30 @@ export class Shelf extends DurableObject<Env> {
 
   getFile(id: string): SharedFile { return present(this.#file(id), this.env); }
 
-  async reserveUpload(user: Principal, input: UploadMetadata): Promise<FileRow> {
-    const path = cleanPath(input.path);
-    const upload = this.ctx.storage.sql.exec<{ owner_id: string }>('SELECT owner_id FROM uploads WHERE id = ?', input.uploadId).toArray()[0];
-    if (!upload) throw new HttpError(404, 'The upload was not found.');
-    if (upload.owner_id !== user.id) throw new HttpError(403, 'This upload belongs to another user.');
-    const row: FileRow = {
-      id: crypto.randomUUID(), upload_id: input.uploadId, path, name: path.split('/').at(-1)!,
-      object_key: `${input.uploadId}/${path}`, content_type: input.contentType, size: input.size,
-      uploader_email: user.email, uploader_label: user.label, source: input.source, created_at: Date.now(),
-      trashed_at: null, trashed_by_id: null, trashed_by_label: null, delete_started_at: null,
-    };
-    const hash = await objectKeyHash(row.object_key);
-    const reserved = this.ctx.storage.sql.exec<{ id: string }>(`INSERT INTO files
-      (id, upload_id, path, name, object_key, content_type, size, uploader_id, uploader_email, uploader_label, source, status, created_at)
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'uploading', ?
-      WHERE NOT EXISTS (SELECT 1 FROM deleted_files WHERE object_key_hash = ?)
-      ON CONFLICT(upload_id, path) DO NOTHING RETURNING id`,
-    row.id, row.upload_id, row.path, row.name, row.object_key, row.content_type, row.size,
-    user.id, row.uploader_email, row.uploader_label, row.source, row.created_at, hash).toArray();
-    if (!reserved.length) throw new HttpError(409, 'This file path is already used. Start a new upload group to use it again.');
-    return row;
-  }
-
-  completeUpload(id: string): SharedFile {
-    const row = this.ctx.storage.sql.exec<FileRow>("UPDATE files SET status = 'ready' WHERE id = ? AND status = 'uploading' RETURNING *", id).toArray()[0];
-    if (!row) return this.getFile(id);
+  checkUploads(paths: string[]) { return this.uploads.check(paths); }
+  async reserveUpload(user: Principal, input: UploadMetadata) { return this.uploads.reserve(user, input); }
+  async completeUpload(id: string): Promise<SharedFile> {
+    const file = await this.uploads.complete(id);
     this.#broadcast();
-    return present(row, this.env);
+    return file;
   }
+  completedUpload(id: string): SharedFile | null { return this.uploads.completed(id); }
+  abortUpload(id: string): string | null { return this.uploads.abort(id); }
+  releaseUpload(id: string): void { this.uploads.release(id); }
+  async alarm(): Promise<void> { await this.uploads.cleanup(); }
 
-  abortUpload(id: string): string | null {
-    return this.ctx.storage.sql.exec<{ object_key: string }>("SELECT object_key FROM files WHERE id = ? AND status = 'uploading'", id).toArray()[0]?.object_key ?? null;
-  }
-
-  releaseUpload(id: string): void {
-    this.ctx.storage.sql.exec("DELETE FROM files WHERE id = ? AND status = 'uploading'", id);
-  }
-
-  findContent(uploadId: string, path: string): FileRow {
-    const row = this.ctx.storage.sql.exec<FileRow>(`SELECT * FROM files WHERE upload_id = ? AND path = ?
-      AND status = 'ready' AND trashed_at IS NULL AND delete_started_at IS NULL`, uploadId, cleanPath(path)).toArray()[0];
+  async findContent(uploadId: string, value: string): Promise<FileRow> {
+    const path = cleanPath(value);
+    const sql = this.ctx.storage.sql;
+    const link = sql.exec<{ file_id: string }>('SELECT file_id FROM file_links WHERE upload_id = ? AND path = ?', uploadId, path).toArray()[0];
+    if (link) return this.readyFile(link.file_id);
+    // Relative HTML assets can now come from any upload in the merged folder.
+    // Exact legacy links, including deleted links, never change their target.
+    if (!sql.exec('SELECT id FROM uploads WHERE id = ?', uploadId).toArray().length ||
+      sql.exec('SELECT id FROM deleted_files WHERE object_key_hash = ?', await objectKeyHash(`${uploadId}/${path}`)).toArray().length) {
+      throw new HttpError(404, 'The file was not found.');
+    }
+    const row = sql.exec<FileRow>("SELECT * FROM files WHERE path = ? AND status = 'ready'", path).toArray()[0];
     if (!row) throw new HttpError(404, 'The file was not found.');
     return row;
   }
@@ -98,6 +84,7 @@ export class Shelf extends DurableObject<Env> {
   }
 
   trashFile(user: Principal, id: string): SharedFile {
+    this.uploads.assertNotWriting(id);
     const row = this.ctx.storage.sql.exec<FileRow>(`UPDATE files
       SET status = 'trashed', trashed_at = ?, trashed_by_id = ?, trashed_by_label = ?
       WHERE id = ? AND status = 'ready' AND trashed_at IS NULL AND delete_started_at IS NULL RETURNING *`,
@@ -110,6 +97,7 @@ export class Shelf extends DurableObject<Env> {
   }
 
   restoreFile(id: string): SharedFile {
+    this.uploads.assertRestorable(this.#file(id));
     const row = this.ctx.storage.sql.exec<FileRow>(`UPDATE files
       SET status = 'ready', trashed_at = NULL, trashed_by_id = NULL, trashed_by_label = NULL
       WHERE id = ? AND status = 'trashed' AND delete_started_at IS NULL RETURNING *`, id).toArray()[0];
@@ -122,6 +110,7 @@ export class Shelf extends DurableObject<Env> {
 
   beginDelete(id: string, confirmed: boolean): string | null {
     if (confirmed !== true) throw new HttpError(400, 'Confirm permanent deletion with confirm: true.');
+    this.uploads.assertNotWriting(id);
     const row = this.ctx.storage.sql.exec<FileRow>(`UPDATE files SET status = 'deleting', delete_started_at = COALESCE(delete_started_at, ?)
       WHERE id = ? AND status IN ('trashed', 'deleting') RETURNING *`, Date.now(), id).toArray()[0];
     if (row) { this.#broadcast(); return row.object_key; }

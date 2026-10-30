@@ -164,6 +164,7 @@
               <div><dt><code>list_files</code></dt><dd>Search by file name and filter by type or author.</dd></div><div><dt><code>get_file_filters</code></dt><dd>Get file types and authors.</dd></div>
               <div><dt><code>get_file</code></dt><dd>Get file and download links.</dd></div>
               <div><dt><code>create_upload</code></dt><dd>Start a file or folder upload.</dd></div>
+              <div><dt><code>check_uploads</code></dt><dd>Check existing paths before replacement approval.</dd></div>
               <div><dt><code>upload_file</code></dt><dd>Upload text or binary files.</dd></div>
               <div><dt><code>trash_file</code></dt><dd>Move a file to Trash.</dd></div>
               <div><dt><code>restore_file</code></dt><dd>Restore the original file link.</dd></div>
@@ -177,6 +178,7 @@
             <p><strong>Inline MCP uploads:</strong> up to 5 MiB per file.</p>
             <p><strong>Web and HTTP uploads:</strong> <span id="mcp-file-limit">Loading…</span></p>
             <p>For a folder, call <code>create_upload</code> once. Reuse its <code>uploadId</code> and keep each relative path so HTML can load its images.</p>
+            <p>Folders with the same full path merge. Before replacing a file, call <code>check_uploads</code>, ask for approval, then pass the file ID and version in <code>upload_file.replace</code>. The file link stays the same.</p>
             <p class="setup-hint">For larger files, use the web app or ask <code>create_upload</code> for an HTTP upload URL. HTTP requests must use the same Access OAuth token.</p>
           </section>
         </div>
@@ -204,6 +206,15 @@ CF-Access-Client-Secret: YOUR_SERVICE_CLIENT_SECRET</code></pre>
       </section>
       <noscript><p class="notice">Enable JavaScript to upload and list files.</p></noscript>
     </main>
+    <dialog id="replace-file-dialog" class="confirm-dialog" aria-labelledby="replace-file-heading" aria-describedby="replace-file-description">
+      <h2 id="replace-file-heading">Replace this file?</h2>
+      <p id="replace-file-path" class="delete-file-name"></p>
+      <p id="replace-file-changed" role="status" hidden>This path changed after the upload check. Review the current file before you continue.</p>
+      <dl class="replace-comparison"><div><dt>Current file</dt><dd id="replace-existing-size"></dd></div><div><dt>New file</dt><dd id="replace-incoming-size"></dd></div></dl>
+      <p id="replace-file-description">Replace the current contents and keep the same link. The old contents cannot be restored from Trash.</p>
+      <label id="replace-apply-all-label" class="replace-apply-all"><input type="checkbox" id="replace-apply-all" /> Use this choice for other existing files in this upload</label>
+      <form method="dialog" class="dialog-actions"><button class="button quiet" value="cancel">Cancel upload</button><button class="button" value="skip" autofocus>Skip</button><button class="button primary" value="replace">Replace</button></form>
+    </dialog>
     <dialog id="delete-file-dialog" class="confirm-dialog" aria-labelledby="delete-file-heading" aria-describedby="delete-file-description">
       <i class="ph ph-warning-circle delete-warning" aria-hidden="true"></i>
       <h2 id="delete-file-heading">Delete permanently?</h2>

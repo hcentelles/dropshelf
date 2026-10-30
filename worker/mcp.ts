@@ -3,7 +3,7 @@ import { createMcpHandler } from 'agents/mcp/server';
 import { z } from 'zod';
 import { describeAllowedTypes } from '../shared/formats';
 import { MAX_BULK_FILES, type Principal } from '../shared/types';
-import { createUpload, getFile, listFiles, uploadFile } from './files';
+import { checkUploads, createUpload, getFile, listFiles, uploadFile } from './files';
 import { allowedFileTypes, HttpError, isHttpError } from './http';
 import { deleteFilePermanently, restoreFile, trashFile } from './trash';
 import { getFileFilters } from './files';
@@ -21,7 +21,7 @@ export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, use
         return { content: [{ type: 'text' as const, text: JSON.stringify(value) }] };
       } catch (error) {
         return { isError: true, content: [{ type: 'text' as const,
-          text: isHttpError(error) ? error.message : 'The operation failed. Try again.' }] };
+          text: isHttpError(error) ? JSON.stringify({ error: error.message, status: error.status, ...error.details }) : 'The operation failed. Try again.' }] };
       }
     };
     server.registerTool('whoami', {
@@ -29,7 +29,7 @@ export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, use
       annotations: { readOnlyHint: true },
     }, async () => ({ content: [{ type: 'text', text: JSON.stringify(user) }] }));
     server.registerTool('list_files', {
-      description: 'List team files or Trash. Sort by newest (default), oldest, or name (A–Z). Date sorting uses upload time for files and Trash time for Trash. Search file names with q. Filter with a MIME type or image/* and an author ID from get_file_filters. Keep the same view, filters, and sort with nextCursor.',
+      description: 'List team files or Trash. Sort by newest (default), oldest, or name (A–Z). Date sorting uses the last update time for files and Trash time for Trash. Search file names with q. Filter with a MIME type or image/* and an author ID from get_file_filters. Keep the same view, filters, and sort with nextCursor.',
       inputSchema: { cursor: z.string().max(4096).optional(), limit: z.number().int().min(1).max(100).optional(), view: z.enum(['files', 'trash']).default('files'), q: z.string().max(200).optional(), type: z.string().max(100).optional(), author: z.string().max(256).optional(), sort: z.enum(['newest', 'oldest', 'name']).default('newest') },
       annotations: { readOnlyHint: true },
     }, ({ cursor, limit, view, q, type, author, sort }) => result(() => listFiles(env, cursor ?? null, limit, view, { q, type, author, sort })));
@@ -66,20 +66,26 @@ export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, use
       }, ({ ids, confirm }) => result(() => manageFiles(env, user, action, ids, confirm === true)));
     }
     server.registerTool('create_upload', {
-      description: 'Start a group of files. Reuse its uploadId for a folder so relative paths work. For a file over 5 MiB, PUT its raw bytes to the returned uploadUrl with ?path=relative/path, Content-Type, Content-Length, and your Access authorization.',
+      description: 'Start an upload batch. Folder paths are shared across all batches. For a file over 5 MiB, PUT its raw bytes to the returned uploadUrl with ?path=relative/path, Content-Type, Content-Length, and Access authorization. Check existing paths first. A confirmed replacement also requires replaceId and replaceVersion query parameters.',
     }, () => result(async () => {
       const uploadId = await createUpload(env, user);
       return { uploadId, uploadUrl: `${env.APP_ORIGIN}/api/uploads/${uploadId}`, maxMcpFileBytes: MAX_MCP_FILE };
     }));
+    server.registerTool('check_uploads', {
+      description: 'Check up to 100 full file paths before uploading. If a file exists, show the path and ask the user before replacing it. Use the returned file ID and version only after confirmation. Files with different paths merge into existing folders.',
+      inputSchema: { paths: z.array(z.string().min(1).max(1024)).min(1).max(100) },
+      annotations: { readOnlyHint: true },
+    }, ({ paths }) => result(() => checkUploads(env, paths)));
     server.registerTool('upload_file', {
-      description: `Upload a permitted file, up to 5 MiB. Allowed types: ${describeAllowedTypes(allowedFileTypes(env))}. Use utf8 for text and base64 for binary files. Reuse uploadId and preserve relative paths for a folder. The server records your verified identity.`,
+      description: `Upload a permitted file, up to 5 MiB. Allowed types: ${describeAllowedTypes(allowedFileTypes(env))}. Paths belong to one shared folder tree. Existing files require user confirmation: call check_uploads, ask the user, then pass replace with the exact file ID and version. A replacement keeps the file URL. If the version changes, ask again. Use utf8 for text and base64 for binary files. The server records your verified identity.`,
       inputSchema: {
         path: z.string().min(1).max(1024), content: z.string().max(7 * 1024 * 1024),
         encoding: z.enum(['utf8', 'base64']).default('utf8'),
         contentType: z.string().max(100).optional(), uploadId: z.uuid().optional(),
+        replace: z.object({ id: z.uuid(), version: z.number().int().positive() }).optional(),
       },
-      annotations: { destructiveHint: false, idempotentHint: false },
-    }, ({ path, content, encoding, contentType, uploadId }) => result(async () => {
+      annotations: { destructiveHint: true, idempotentHint: false },
+    }, ({ path, content, encoding, contentType, uploadId, replace }) => result(async () => {
       let bytes: Uint8Array;
       if (encoding === 'utf8') bytes = new TextEncoder().encode(content);
       else {
@@ -91,7 +97,7 @@ export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, use
       if (bytes.byteLength > MAX_MCP_FILE) throw new HttpError(413, 'Use the HTTP upload endpoint for files over 5 MiB.');
       return uploadFile(env, user, {
         uploadId: uploadId ?? await createUpload(env, user), path, type: contentType ?? '',
-        size: bytes.byteLength, body: bytes, source: 'mcp',
+        size: bytes.byteLength, body: bytes, source: 'mcp', replace,
       });
     }));
     return server;

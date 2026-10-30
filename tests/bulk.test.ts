@@ -1,6 +1,6 @@
 import { env, exports } from 'cloudflare:workers';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { prepareDatabase, resetDatabase } from './database';
+import { prepareDatabase, resetDatabase, database } from './database';
 import { createUpload, getFile, listFiles, uploadFile } from '../worker/files';
 import { getFileFilters } from '../worker/files';
 import { manageFiles } from '../worker/bulk';
@@ -87,8 +87,9 @@ describe('search, filters, and bulk actions', () => {
     const one = await add('one.html');
     const two = await add('two.html');
     await manageFiles(env, bob, 'trash', [one.id, two.id]);
+    const oneKey = await database(sql => sql.exec<{ object_key: string }>('SELECT object_key FROM files WHERE id = ?', one.id).one().object_key);
     const failingEnv = { ...env, FILES: { delete: async (key: string) => {
-      if (key === `${one.uploadId}/${one.path}`) throw new Error('Simulated storage failure');
+      if (key === oneKey) throw new Error('Simulated storage failure');
       await env.FILES.delete(key);
     } } as unknown as R2Bucket };
     expect((await manageFiles(failingEnv, bob, 'delete', [one.id, two.id], true)).results.map(result => result.ok)).toEqual([false, true]);

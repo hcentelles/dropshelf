@@ -97,3 +97,22 @@ it('sorts MCP results by name across pages and rejects a changed sort order', as
   const changed = await rpc('tools/call', { name: 'list_files', arguments: { ...args, sort: 'oldest', cursor: page.nextCursor } });
   expect(changed.result.result.isError).toBe(true);
 });
+
+it('reports path conflicts and replaces only the confirmed file version through MCP', async () => {
+  const path = 'mcp-replacement/page.html';
+  const call = async (name: string, args: unknown) => (await rpc('tools/call', { name, arguments: args })).result.result;
+  const uploaded = await call('upload_file', { path, content: 'Original' });
+  const file = JSON.parse(uploaded.content[0].text);
+  const checked = await call('check_uploads', { paths: [path] });
+  expect(JSON.parse(checked.content[0].text)[0]).toMatchObject({ existing: { id: file.id, version: 1 } });
+  const refused = await call('upload_file', { path, content: 'Unconfirmed' });
+  expect(refused.isError).toBe(true);
+  expect(JSON.parse(refused.content[0].text)).toMatchObject({ status: 409, conflict: { id: file.id, version: 1 } });
+  const replaced = await call('upload_file', { path, content: 'Confirmed', replace: { id: file.id, version: 1 } });
+  expect(replaced.isError).not.toBe(true);
+  expect(JSON.parse(replaced.content[0].text)).toMatchObject({ id: file.id, url: file.url, version: 2 });
+  expect(await (await exports.default.fetch(file.url)).text()).toBe('Confirmed');
+  const stale = await call('upload_file', { path, content: 'Old confirmation', replace: { id: file.id, version: 1 } });
+  expect(stale.isError).toBe(true);
+  expect(JSON.parse(stale.content[0].text)).toMatchObject({ status: 409, conflict: { version: 2 } });
+});

@@ -41,7 +41,7 @@ export function fileRow(file: ShelfEntry, fresh: boolean, callbacks: FileActions
   const preview = text('div', '', `file-preview ${folder ? 'folder-preview' : file.contentType === 'text/html' ? 'html-preview' : !isImage ? 'document-preview' : ''}`);
   if (!folder && !inTrash && canPreview(file.contentType) && file.contentType !== 'image/svg+xml') {
     const img = document.createElement('img');
-    img.src = `/api/files/${file.id}/thumbnail`;
+    img.src = `/api/files/${file.id}/thumbnail?v=${file.version}`;
     img.alt = '';
     img.loading = 'lazy';
     img.addEventListener('error', () => { img.remove(); preview.append(icon('image')); }, { once: true });
@@ -56,10 +56,10 @@ export function fileRow(file: ShelfEntry, fresh: boolean, callbacks: FileActions
     pending.title = 'Permanent deletion has started. Use Retry permanent delete to finish.';
     title.append(pending);
   }
-  if (fresh) title.append(text('span', 'New', 'new-badge'));
+  if (fresh) title.append(text('span', !folder && file.version > 1 ? 'Updated' : 'New', 'new-badge'));
   const type = folder ? `${file.fileCount} ${file.fileCount === 1 ? 'file' : 'files'}`
     : file.contentType === 'text/html' ? 'HTML' : (file.name.split('.').at(-1) ?? 'Image').toUpperCase();
-  const dateValue = file.trashedAt ?? file.createdAt;
+  const dateValue = file.trashedAt ?? file.updatedAt;
   const uploaderName = identityLabel(file.uploaderLabel);
   const mobileMeta = text('div', `${uploaderName} · ${new Date(dateValue).toLocaleDateString('en')}`, 'mobile-meta');
   mobileMeta.title = mobileMeta.textContent ?? '';

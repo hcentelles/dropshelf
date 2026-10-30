@@ -16,6 +16,8 @@ export interface SharedFile {
   uploaderLabel: string;
   source: 'web' | 'mcp';
   createdAt: number;
+  updatedAt: number;
+  version: number;
   trashedAt: number | null;
   trashedBy: string | null;
   deletionPending: boolean;
@@ -29,8 +31,8 @@ export interface FilePage {
   total: number;
 }
 
-export interface SharedFolder extends Pick<SharedFile, 'id' | 'uploadId' | 'path' | 'name' | 'size' |
-  'uploaderLabel' | 'source' | 'createdAt' | 'trashedAt' | 'trashedBy' | 'deletionPending'> {
+export interface SharedFolder extends Pick<SharedFile, 'id' | 'path' | 'name' | 'size' |
+  'uploaderLabel' | 'source' | 'createdAt' | 'updatedAt' | 'trashedAt' | 'trashedBy' | 'deletionPending'> {
   kind: 'folder';
   fileCount: number;
 }
@@ -39,6 +41,8 @@ export type ShelfEntry = SharedFile | SharedFolder;
 export function isFolder(entry: ShelfEntry): entry is SharedFolder { return 'kind' in entry && entry.kind === 'folder'; }
 export interface ExplorerPage { entries: ShelfEntry[]; nextCursor: string | null; total: number }
 export interface FileScope { uploadId?: string; folder?: string }
+export interface ReplaceFile { id: string; version: number }
+export interface UploadCheck { path: string; existing?: SharedFile; error?: string }
 
 export type FileView = 'files' | 'trash';
 export type FileSort = 'newest' | 'oldest' | 'name';

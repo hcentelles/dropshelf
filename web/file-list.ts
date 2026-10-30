@@ -294,7 +294,7 @@ export function createFileList(options: FileListOptions) {
       const files = new Map<string, SharedFile>();
       for (const entry of entries) {
         const children = isFolder(entry)
-          ? await collectFiles(options.view, { uploadId: entry.uploadId, folder: entry.path }, controller.signal) : [entry];
+          ? await collectFiles(options.view, { folder: entry.path }, controller.signal) : [entry];
         if (controller.signal.aborted || started !== revision) return [];
         for (const file of children) files.set(file.id, file);
       }
@@ -309,7 +309,7 @@ export function createFileList(options: FileListOptions) {
   }
 
   function setScope(next: FileScope): void {
-    if ((scope.folder ?? '') === (next.folder ?? '') && (scope.uploadId ?? '') === (next.uploadId ?? '')) return;
+    if ((scope.folder ?? '') === (next.folder ?? '')) return;
     scope = { ...next };
     revision++;
     request?.abort();

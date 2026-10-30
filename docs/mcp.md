@@ -91,7 +91,7 @@ Call `whoami` first. Then upload a simple page:
 }
 ```
 
-The result contains a file ID, verified uploader, and protected browser and download URLs. A link does not grant access to a user who is outside the Access policy.
+Call `check_uploads` with the full path first. If a file exists, follow the replacement steps below. The upload result contains a file ID, version, verified uploader, and protected browser and download URLs. A link does not grant access to a user who is outside the Access policy.
 
 For a folder:
 
@@ -102,13 +102,39 @@ For a folder:
 
 The `ALLOWED_FILE_TYPES` Worker variable applies to MCP uploads too. The `upload_file` tool description reports the active setting.
 
-Use `list_files` to get the newest files by default. Set `sort` to `newest`, `oldest`, or `name` (A–Z). Date sorting uses upload time for files and the time moved to Trash for Trash. Name sorting ignores ASCII letter case and uses the file ID to break ties. Pass `nextCursor` as `cursor` on the next call. Keep the same `view`, `q`, `type`, `author`, and `sort` on every page. Start without a cursor when you change the sort order. Use `get_file` with an ID to get one record.
+Folders merge by full path across upload groups. HTML can load relative assets added in later groups. Paths are case-sensitive. A file and a folder cannot use the same full path.
+
+Use `list_files` to get the newest files by default. Set `sort` to `newest`, `oldest`, or `name` (A–Z). Date sorting uses the last update time for files and the time moved to Trash for Trash. Name sorting ignores ASCII letter case and uses the file ID to break ties. Pass `nextCursor` as `cursor` on the next call. Keep the same `view`, `q`, `type`, `author`, and `sort` on every page. Start without a cursor when you change the sort order. Use `get_file` with an ID to get one record.
+
+## Replace an existing file
+
+1. Call `check_uploads` with `paths`, an array of up to 100 full relative paths.
+2. If a result contains `existing`, show the user the path and current file details. Ask before replacement.
+3. After approval, call `upload_file` with the same path and `replace: { "id": "CURRENT_FILE_ID", "version": CURRENT_VERSION }`.
+4. If the tool returns a conflict, read its current file details and ask again. Do not reuse approval for an older version.
+
+For example, after approval of version 1:
+
+```json
+{
+  "name": "upload_file",
+  "arguments": {
+    "path": "report/index.html",
+    "content": "<h1>Updated report</h1>",
+    "replace": { "id": "CURRENT_FILE_ID", "version": 1 }
+  }
+}
+```
+
+Replacement keeps `id`, `uploadId`, `createdAt`, `url`, and `downloadUrl`. It increases `version` and updates `updatedAt`, size, media type, source, and uploader. The old contents remain available until the new upload completes. There is no version history or recovery of replaced contents from Trash. A path conflict without approval leaves the current file unchanged.
+
+The HTTP API has the same rules. Use `POST /api/uploads/check` with `{ "paths": [...] }`, then add `replaceId` and `replaceVersion` to the upload URL only after approval. A conflict response has HTTP status `409` and includes the current file when available.
 
 ## Search, filters, and bulk actions
 
 Use `list_files` with `q` to search a file name. Search is case-insensitive for ASCII characters and treats `%`, `_`, and `\` as literal characters. Combine it with `type` and `author`. The filters apply to the full history, including files on later pages.
 
-Call `get_file_filters` with `view: "files"` or `view: "trash"` to get available type and author values and counts. Use `image/*` for all image types, or a MIME type such as `application/pdf`. The author value is the original uploader's identity ID, as returned by `get_file_filters`.
+Call `get_file_filters` with `view: "files"` or `view: "trash"` to get available type and author values and counts. Use `image/*` for all image types, or a MIME type such as `application/pdf`. The author value is the latest uploader's identity ID, as returned by `get_file_filters`.
 
 Call `trash_files`, `restore_files`, or `delete_files_permanently` with an `ids` array of 1 to 10 unique file IDs. Permanent deletion also requires `confirm: true`. Each result has `id`, `ok`, and an error on failure. Retry only failures. For more than 10 files, send separate calls.
 
@@ -125,7 +151,7 @@ Any approved team member or configured service identity can manage Trash:
 
 `get_file` includes `trashedAt`, `trashedBy`, and `deletionPending`. A pending permanent deletion cannot be restored. Retry `delete_file_permanently` to finish it. Repeated permanent-delete calls for the same file ID are safe.
 
-Deletion removes the file record and stored bytes. Only a file ID and path hash remain. A permanently deleted path cannot be used again within the same upload group. Start a new group for a replacement so the deleted URL stays inactive.
+Deletion removes the file record and stored bytes. Link reservations, the file ID, and an object-key hash remain. A deleted URL stays inactive. Start a new upload group to reuse a path after Trash or deletion. Restore fails while another active file uses that path; move the active file to Trash first.
 
 ## Larger files
 

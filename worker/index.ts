@@ -1,7 +1,7 @@
 import type { AppConfig, FileSort, FileView } from '../shared/types';
 import { authenticate } from './auth';
 import { serveContent } from './content';
-import { createUpload, getFile, listFiles, thumbnail, uploadFile } from './files';
+import { checkUploads, createUpload, getFile, listFiles, thumbnail, uploadFile } from './files';
 import { allowedFileTypes, checkBrowserOrigin, HttpError, isHttpError, isLoopback, json, maxFileBytes, origins, readBody, readJson, secureResponse } from './http';
 import { handleMcp, MAX_MCP_BODY } from './mcp';
 import { deleteFilePermanently, restoreFile, trashFile } from './trash';
@@ -88,6 +88,13 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
       }
       return json({ uploadId: await createUpload(env, user) }, 201);
     }
+    if (url.pathname === '/api/uploads/check' && request.method === 'POST') {
+      const payload = await readJson(request, 512 * 1024);
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).length !== 1 || !('paths' in payload)) {
+        throw new HttpError(400, 'Send the file paths to check.');
+      }
+      return json(await checkUploads(env, payload.paths as string[]));
+    }
     const upload = /^\/api\/uploads\/([0-9a-f-]{36})$/.exec(url.pathname);
     if (upload && request.method === 'PUT') {
       const length = request.headers.get('Content-Length');
@@ -97,6 +104,8 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
       return json(await uploadFile(env, user, {
         uploadId: upload[1]!, path, type: request.headers.get('Content-Type') ?? '',
         size: Number(length), body: request.body ?? new Uint8Array(), source: 'web',
+        replace: url.searchParams.has('replaceId') || url.searchParams.has('replaceVersion')
+          ? { id: url.searchParams.get('replaceId') ?? '', version: Number(url.searchParams.get('replaceVersion')) } : undefined,
       }), 201);
     }
     throw new HttpError(404, 'The API endpoint was not found.');
@@ -119,7 +128,7 @@ export default {
   async fetch(request, env, ctx) {
     try { return secureResponse(await route(request, env, ctx)); }
     catch (error) {
-      if (isHttpError(error)) return secureResponse(json({ error: error.message }, error.status));
+      if (isHttpError(error)) return secureResponse(json({ error: error.message, ...error.details }, error.status));
       console.error(JSON.stringify({ event: 'request_failed', path: new URL(request.url).pathname,
         message: error instanceof Error ? error.message : 'Unknown error' }));
       return secureResponse(json({ error: 'The request failed. Try again.' }, 500));

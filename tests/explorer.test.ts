@@ -22,22 +22,22 @@ async function seed(paths: string[], view: FileView = 'files'): Promise<string> 
 }
 
 describe.each(['files', 'trash'] as const)('%s explorer', view => {
-  it('shows only immediate children at each level and keeps separate uploads apart', async () => {
+  it('shows immediate children and merges folders across uploads', async () => {
     const uploadId = await seed(['site/index.html', 'site/assets/styles.css', 'site/assets/deep/page.html', 'standalone.html'], view);
-    const other = await seed(['site/other.html'], view);
+    await seed(['site/other.html'], view);
     const root = await listExplorer(env, null, 30, view);
-    expect(root.total).toBe(3);
-    expect(root.entries.filter(isFolder).map(folder => folder.uploadId).sort()).toEqual([uploadId, other].sort());
-    expect(root.entries.find(entry => entry.uploadId === uploadId && isFolder(entry))).toMatchObject({ path: 'site', fileCount: 3, size: 30 });
+    expect(root.total).toBe(2);
+    expect(root.entries.filter(isFolder)).toHaveLength(1);
+    expect(root.entries.find(isFolder)).toMatchObject({ path: 'site', fileCount: 4, size: 40 });
     expect(root.entries.at(-1)!.name).toBe('standalone.html');
-    const site = await listExplorer(env, null, 30, view, { uploadId, folder: 'site' });
-    expect(site.entries.map(entry => entry.name)).toEqual(['assets', 'index.html']);
+    const site = await listExplorer(env, null, 30, view, { uploadId, folder: 'site', sort: 'name' });
+    expect(site.entries.map(entry => entry.name)).toEqual(['assets', 'index.html', 'other.html']);
     expect(site.entries[0]).toMatchObject({ path: 'site/assets', fileCount: 2 });
     const assets = await listExplorer(env, null, 30, view, { uploadId, folder: 'site/assets' });
     expect(assets.entries.map(entry => entry.name)).toEqual(['deep', 'styles.css']);
     const deep = await listExplorer(env, null, 30, view, { uploadId, folder: 'site/assets/deep' });
     expect(deep.entries.map(entry => entry.name)).toEqual(['page.html']);
-    expect((await listFiles(env, null, 30, view, { uploadId, folder: 'site' })).total).toBe(3);
+    expect((await listFiles(env, null, 30, view, { uploadId, folder: 'site' })).total).toBe(4);
   });
 
   it.each(['newest', 'oldest', 'name'] as const)('groups before pagination and keeps folders first with %s sorting', async sort => {
@@ -88,7 +88,7 @@ it('binds cursors to their folder, filters, sort, and view and validates the HTT
   await expect(listExplorer(env, first.nextCursor, 1, 'trash', scope)).rejects.toMatchObject({ status: 400 });
   const flat = await listFiles(env, null, 1, 'files', scope);
   await expect(listFiles(env, flat.nextCursor, 1)).rejects.toMatchObject({ status: 400 });
-  for (const query of ['folder=site', `uploadId=${uploadId}`, `uploadId=${uploadId}&folder=../site`, 'view=invalid', 'cursor=invalid', 'limit=101']) {
+  for (const query of [`uploadId=${uploadId}`, `uploadId=${uploadId}&folder=../site`, 'view=invalid', 'cursor=invalid', 'limit=101']) {
     const response = await exports.default.fetch(`http://localhost:8787/api/explorer?${query}`);
     expect(response.status).toBe(400);
   }

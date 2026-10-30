@@ -48,4 +48,58 @@ export function initializeSchema(storage: DurableObjectStorage): void {
       sql.exec('INSERT INTO schema_migrations (version) VALUES (1)');
     });
   }
+  if (version < 2) {
+    storage.transactionSync(() => {
+      sql.exec(`
+        ALTER TABLE files ADD COLUMN url_path TEXT;
+        ALTER TABLE files ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE files ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
+        UPDATE files SET url_path = path, updated_at = created_at;
+        CREATE TABLE file_links (
+          upload_id TEXT NOT NULL, path TEXT NOT NULL, file_id TEXT NOT NULL,
+          PRIMARY KEY (upload_id, path)
+        );
+        INSERT INTO file_links SELECT upload_id, path, id FROM files;
+        CREATE TABLE upload_writes (
+          id TEXT PRIMARY KEY, upload_id TEXT NOT NULL, path TEXT NOT NULL, file_id TEXT NOT NULL,
+          expected_version INTEGER, object_key TEXT NOT NULL UNIQUE,
+          content_type TEXT NOT NULL, size INTEGER NOT NULL,
+          uploader_id TEXT NOT NULL, uploader_email TEXT, uploader_label TEXT NOT NULL,
+          source TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL,
+          state TEXT NOT NULL CHECK (state IN ('uploading', 'complete'))
+        );
+        CREATE UNIQUE INDEX upload_writes_path ON upload_writes(path) WHERE state = 'uploading';
+        CREATE TABLE retired_objects (object_key TEXT PRIMARY KEY, delete_after INTEGER NOT NULL);
+      `);
+      // Keep all old links and bytes. Only rename legacy file conflicts; folders merge.
+      const rows = sql.exec<{ id: string; path: string }>("SELECT id, path FROM files WHERE status IN ('ready', 'uploading') ORDER BY created_at, id").toArray();
+      // Trash can still reserve a name inside an old upload group.
+      const reserved = new Set(sql.exec<{ path: string }>('SELECT path FROM files').toArray().map(row => row.path));
+      const assigned = new Set<string>();
+      for (const row of rows) {
+        let path = row.path;
+        if (assigned.has(path) || rows.some(other => other.path.startsWith(`${path}/`))) {
+          const slash = path.lastIndexOf('/');
+          const directory = path.slice(0, slash + 1);
+          const name = path.slice(slash + 1);
+          const dot = name.lastIndexOf('.');
+          const extension = dot > 0 ? name.slice(dot).slice(0, 40) : '';
+          const stem = dot > 0 ? name.slice(0, dot) : name;
+          let number = 2;
+          do {
+            const suffix = ` (copy ${number++})${extension}`;
+            path = `${directory}${stem.slice(0, 255 - suffix.length)}${suffix}`;
+            if (path.length > 1024) path = `Recovered files/${row.id}/${number}/${name}`;
+          } while (reserved.has(path) || rows.some(other => other.path.startsWith(`${path}/`)));
+          sql.exec('UPDATE files SET path = ?, name = ? WHERE id = ?', path, path.split('/').at(-1)!, row.id);
+          reserved.add(path);
+        }
+        assigned.add(path);
+      }
+      sql.exec(`
+        CREATE UNIQUE INDEX files_active_path ON files(path) WHERE status IN ('ready', 'uploading');
+        INSERT INTO schema_migrations (version) VALUES (2);
+      `);
+    });
+  }
 }

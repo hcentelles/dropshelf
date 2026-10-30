@@ -1,14 +1,16 @@
+import type { SharedFile } from '../shared/types';
+
 export class ApiError extends Error {
-  constructor(message: string, public status: number) { super(message); }
+  constructor(message: string, public status: number, public conflict?: SharedFile) { super(message); }
 }
 
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, { ...options, credentials: 'same-origin', redirect: 'error' });
   if (!response.ok) {
-    const body = await response.json().catch(() => null) as { error?: string } | null;
+    const body = await response.json().catch(() => null) as { error?: string; conflict?: SharedFile } | null;
     throw new ApiError(response.status === 401 || response.status === 403
       ? 'Your session has ended. Reload this page to sign in.'
-      : body?.error ?? 'The request failed. Try again.', response.status);
+      : body?.error ?? 'The request failed. Try again.', response.status, body?.conflict);
   }
   return response.json() as Promise<T>;
 }

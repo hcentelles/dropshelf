@@ -147,6 +147,10 @@ details[data-side=above][data-align=start] > .menu-panel { transform-origin: bot
 .confirm-dialog .delete-file-name { color: var(--text-secondary); font-weight: 550; overflow-wrap: anywhere; }
 .confirm-dialog .delete-file-error { color: var(--danger); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.replace-comparison { display: grid; gap: 12px; margin-top: 20px; padding: 16px; border: 1px solid var(--border); border-radius: 10px; }
+.replace-comparison dt { font-size: 12px; color: var(--muted); }
+.replace-comparison dd { margin: 4px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.replace-apply-all { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 12px; font-size: 13px; color: var(--muted); }
 .button.danger { background: var(--danger-button); border-color: var(--danger-button); color: var(--on-danger); }
 .empty-state { text-align: center; padding: 55px 15px 58px; border-bottom: 1px solid var(--border); }
 .empty-state > .ph { font-size: 35px; color: var(--muted); }

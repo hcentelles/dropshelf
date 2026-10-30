@@ -133,7 +133,9 @@ The generated configuration keeps `workers.dev` enabled. The Worker rejects any 
 
 Keep the same R2 bucket, app Worker name, Durable Object class (`Shelf`), and object name (`default`) when you deploy a new code version. The object name is fixed so a hostname change does not create an empty shelf. Schema changes belong in the versioned initialization in `worker/schema.ts`; they run in a synchronous SQLite transaction. Generate configuration again if you move the checkout, because its source paths are absolute.
 
-This version replaces the earlier D1 file index with an empty Durable Object index. It does not copy old records or delete old D1 and R2 resources. Old links are not served through the new index. Use this direct upgrade only for disposable test data; an instance with needed data requires a separate record migration.
+For an existing Durable Object instance, the folder merge update preserves file records and URLs. Schema version 2 adds shared paths and replacement records. If older groups contain the same active file path, the first file keeps its name and later copies get a ` (copy 2)` suffix or the next free number. All original links and bytes stay available. Deploy the app Worker first, then the content Worker.
+
+The earlier move from D1 to Durable Objects did not copy D1 records or remove old resources. An instance still using D1 needs a separate migration for any data it must keep.
 
 Check file name search, type and author filters, and selection across pages. Check that **Delete all** shows the full Trash count when filters hide files. Do not confirm this action against files you need.
 
@@ -141,7 +143,7 @@ Test the full Trash flow with a disposable sample file: move it to Trash, check 
 
 Use Durable Object SQLite point-in-time recovery for metadata recovery. See [Cloudflare storage recovery](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/#point-in-time-recovery-api). Keep a separate R2 backup if your team needs recoverable file copies. A metadata backup alone does not contain file bytes. Recovery must keep the metadata and R2 contents consistent.
 
-A request that ends before upload completion can leave an invisible `uploading` record or an orphan R2 object. Ready file records are the file list's source of truth. Investigate old incomplete records before you remove them; do not delete objects linked to ready records.
+New uploads use write reservations that expire after 30 minutes. A Durable Object alarm removes expired reservations and retired objects. Completed writes keep a receipt for 24 hours to handle a lost response. Ready file records are the file list's source of truth. Check older incomplete records or orphan objects before removal; never remove objects linked to ready records. Replaced contents are not a backup and cannot be recovered from Trash.
 
 Trash has no automatic retention job. If permanent deletion starts but R2 or the metadata update fails, the file stays in a pending state in Trash and cannot be restored. Retry permanent deletion to finish it. Do not clear that state manually: the stored bytes may already be gone. A metadata backup cannot restore bytes removed from R2.
 

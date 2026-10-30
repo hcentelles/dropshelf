@@ -87,13 +87,22 @@ Available tools:
 | `get_file_filters` | Get file types and authors for the selected view |
 | `get_file` | Get a file record and protected URLs |
 | `create_upload` | Start a group for files that share relative paths |
+| `check_uploads` | Check full paths and get current files before replacement approval |
 | `upload_file` | Upload an allowed text or binary file and return its URLs |
 | `trash_file` | Move a file to Trash and stop serving its links |
 | `restore_file` | Restore a file and its original links |
 | `delete_file_permanently` | Remove a file from Trash after explicit confirmation |
 | `trash_files`, `restore_files`, `delete_files_permanently` | Manage up to 10 selected file IDs per call |
 
-For a folder, call `create_upload`, then pass its `uploadId` and each relative path to `upload_file`. HTML and its images, CSS, and JavaScript must share the same upload group.
+For a folder, call `create_upload`, then pass its `uploadId` and each relative path to `upload_file`. Folders with the same full path merge across upload groups. HTML can load images, CSS, and JavaScript added to that folder in later uploads.
+
+## File replacement
+
+The shelf has one shared folder tree. Uploading inside an open folder adds files there. The browser checks each full path before upload. If a file exists, choose **Replace**, **Skip**, or **Cancel upload**. You can apply Replace or Skip to the other existing files in that upload.
+
+Replacement keeps the file ID, browser URL, and download URL. It updates the contents, size, author, and update time. The old contents stay available until the new upload completes. If another user changes the file after approval, the app asks again. Replaced contents cannot be recovered from Trash.
+
+MCP clients must call `check_uploads`, ask for approval, and pass the returned file ID and version in `upload_file.replace`. See the [replacement instructions](docs/mcp.md#replace-an-existing-file).
 
 The [MCP guide](docs/mcp.md) includes authentication, tool examples, larger uploads, and service identities.
 
@@ -107,7 +116,7 @@ In Trash, **Delete all** collects every file across all pages, including files h
 
 Any approved team member can manage Trash. Service identities use the same rules. Files in Trash stop serving content and previews, but keep their stored bytes until permanent deletion. Restore keeps the original path, uploader, date, and URL. Files have no automatic expiry in Trash.
 
-Permanent deletion removes the R2 object and file record. A file ID and path hash remain to make retries safe and prevent reuse of a deleted URL. To upload a replacement at the same relative path after permanent deletion, start a new upload group.
+Permanent deletion removes the R2 object and file record. Link reservations, the file ID, and an object-key hash remain to make retries safe and prevent reuse of a deleted URL. To upload a new file at the same path after moving a file to Trash, start a new upload group. Restore is blocked while another active file uses that path.
 
 ## Live updates
 
@@ -119,8 +128,8 @@ Updates keep the current folder, search, sort order, loaded range, and available
 
 - Default file limit: 100 MiB. MCP inline uploads have a 5 MiB decoded limit. Larger files can use the authenticated HTTP upload endpoint.
 - Browser image support varies. An accepted image can still be downloaded if the browser cannot display it.
-- CSS and JavaScript are enabled by default. Fonts and other types require an allowlist change. HTML can contain inline CSS and JavaScript, and can reference accepted files in its upload group.
-- Folders come from file paths. Empty folders are not stored. Separate upload groups keep same-name folders separate.
+- CSS and JavaScript are enabled by default. Fonts and other types require an allowlist change. HTML can contain inline CSS and JavaScript, and can reference accepted files by relative path.
+- Folders come from file paths. Empty folders are not stored. Folders with the same full path merge. Paths are case-sensitive.
 - Uploaded HTML has a content security policy that blocks network API calls, form submissions, objects, and framing. See [security](docs/security.md).
 - An approved team member can read all ready files in that instance. There are no per-file access rules.
 - Access Managed OAuth is a Cloudflare beta feature. Test the clients you plan to use.

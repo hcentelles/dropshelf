@@ -7,6 +7,7 @@ import { applyFileAction, copyFileLinks } from './bulk-actions';
 import { fileRow } from './file-row';
 import { createFileList } from './file-list';
 import { initLiveUpdates } from './live-updates';
+import { replacementPrompt } from './replace-file';
 import { initInteractions } from './interactions';
 import { initMcpSetup, showMcpSetupError, updateMcpSetup } from './mcp-setup';
 import { currentScope, currentSection, initNavigation } from './navigation';
@@ -39,6 +40,12 @@ function setUploadEnabled(enabled: boolean): void {
   dropZone.setAttribute('aria-busy', String(uploading));
 }
 
+function updateUploadDestination(): void {
+  if (!config) return;
+  const folder = currentScope().folder;
+  element('upload-limit').textContent = `Up to ${formatSize(config.maxFileBytes)} per file. ${folder ? `Upload to /${folder}.` : 'Folder paths are kept.'}`;
+}
+
 function showNotice(message: string, error = false): void {
   element('notice').hidden = false;
   element('notice').classList.toggle('notice-error', error);
@@ -57,9 +64,10 @@ async function moveToTrash(file: ShelfEntry): Promise<void> {
   await trashEntries([file]);
 }
 
-async function startUpload(files: LocalFile[]): Promise<void> {
+async function startUpload(files: LocalFile[], folder = currentScope().folder): Promise<void> {
   if (!config || uploading || managing) return;
   if (!files.length) { showNotice('No files were found in this selection.', true); return; }
+  const incoming = files.map(item => ({ ...item, path: folder ? `${folder}/${item.path}` : item.path }));
   uploading = true;
   setUploadEnabled(false);
   element('notice').hidden = true;
@@ -68,18 +76,22 @@ async function startUpload(files: LocalFile[]): Promise<void> {
   element<HTMLProgressElement>('progress').value = 0;
   recentFiles = [];
   try {
-    const result = await uploadFiles(files, config.maxFileBytes, config.allowedFileTypes, (complete, count, bytes, allBytes) => {
+    const result = await uploadFiles(incoming, config.maxFileBytes, config.allowedFileTypes, (complete, count, bytes, allBytes) => {
       element('progress-text').textContent = `Uploading ${complete} of ${count} files · ${formatSize(bytes)} of ${formatSize(allBytes)}`;
       element<HTMLProgressElement>('progress').value = allBytes ? Math.round(bytes / allBytes * 100) : Math.round(complete / count * 100);
     }, file => {
       fresh.add(file.id);
       activeFiles.insert(file);
-    });
+    }, replacementPrompt());
     recentFiles = result.files;
-    const parts = [`${result.files.length} ${result.files.length === 1 ? 'file' : 'files'} added.`];
+    const added = result.files.length - result.replaced;
+    const parts = [`${added} ${added === 1 ? 'file' : 'files'} added.`];
+    if (result.replaced) parts.push(`${result.replaced} ${result.replaced === 1 ? 'file' : 'files'} replaced.`);
+    if (result.skippedExisting) parts.push(`${result.skippedExisting} existing ${result.skippedExisting === 1 ? 'file' : 'files'} skipped.`);
+    if (result.cancelled) parts.push('Upload cancelled.');
     if (result.skipped) parts.push(`${result.skipped} unsupported ${result.skipped === 1 ? 'file' : 'files'} skipped.`);
     if (result.failed) parts.push(`${result.failed} ${result.failed === 1 ? 'file' : 'files'} failed. ${result.errors[0] ?? ''}`);
-    showNotice(parts.join(' '), result.failed > 0 || !result.files.length);
+    showNotice(parts.join(' '), result.failed > 0);
     updateRecentCopy();
     await activeFiles.refresh();
   } catch (error) { showNotice(error instanceof Error ? error.message : 'The upload failed. Try again.', true); }
@@ -126,8 +138,9 @@ dropZone.addEventListener('drop', event => {
   dragDepth = 0;
   dropZone.classList.remove('drag-active');
   if (!event.dataTransfer || uploading || managing) return;
+  const folder = currentScope().folder;
   const files = droppedFiles(event.dataTransfer);
-  void files.then(startUpload).catch(() => { showNotice('The folder could not be read. Use Select folder to try again.', true); });
+  void files.then(items => startUpload(items, folder)).catch(() => { showNotice('The folder could not be read. Use Select folder to try again.', true); });
 });
 
 initInteractions();
@@ -136,7 +149,7 @@ initNavigation(section => {
   if (section !== 'trash') trash.leave();
   if (section !== 'files') activeFiles.clearSelection();
   const scope = currentScope();
-  if (section === 'files') { activeFiles.setScope(scope); dropZone.hidden = !!scope.folder; }
+  if (section === 'files') { activeFiles.setScope(scope); updateUploadDestination(); }
   if (section === 'trash') trash.setScope(scope);
   if (!config) return;
   if (section === 'files') void activeFiles.ensureFresh();
@@ -154,7 +167,7 @@ async function boot(): Promise<void> {
     fileInput.accept = config.allowedFileTypes.join(',');
     folderInput.accept = config.allowedFileTypes.join(',');
     element('supported-types').textContent = `${describeAllowedTypes(config.allowedFileTypes)}. Other files are skipped.`;
-    element('upload-limit').textContent = `Up to ${formatSize(config.maxFileBytes)} per file. Folder paths are kept.`;
+    updateUploadDestination();
     updateMcpSetup(config);
     setUploadEnabled(true);
     initLiveUpdates(() => { activeFiles.requestLiveUpdate(); trash.requestLiveUpdate(); });

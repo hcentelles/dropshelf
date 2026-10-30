@@ -1,7 +1,7 @@
 import { parseAllowedFileTypes } from '../shared/formats';
 
 export class HttpError extends Error {
-  constructor(public status: number, message: string) { super(message); this.name = 'HttpError'; }
+  constructor(public status: number, message: string, public details?: Record<string, unknown>) { super(message); this.name = 'HttpError'; }
 }
 
 export function isHttpError(error: unknown): error is HttpError {

@@ -31,18 +31,18 @@ export function decode(value: string): unknown {
 export function normalizeScope(input: FileScope): Required<FileScope> {
   const uploadId = input.uploadId ?? '';
   const folder = input.folder ?? '';
-  if (!uploadId && !folder) return { uploadId: '', folder: '' };
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(uploadId) || !folder) {
-    throw new HttpError(400, 'A folder path and its upload ID are required.');
+  if (uploadId && (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(uploadId) || !folder)) {
+    throw new HttpError(400, 'The folder scope is not valid.');
   }
-  return { uploadId, folder: cleanPath(folder) };
+  // Old folder links can include an upload ID. The shared tree uses only the path.
+  return { uploadId: '', folder: folder ? cleanPath(folder) : '' };
 }
 
 export function scopedWhere(view: FileView, scope: Required<FileScope>) {
   const prefix = scope.folder ? `${scope.folder}/` : '';
   return {
-    where: base(view) + (prefix ? ' AND upload_id = ? AND substr(path, 1, length(?)) = ?' : ''),
-    params: prefix ? [scope.uploadId, prefix, prefix] : [],
+    where: base(view) + (prefix ? ' AND substr(path, 1, length(?)) = ?' : ''),
+    params: prefix ? [prefix, prefix] : [],
     prefix,
   };
 }
@@ -55,7 +55,7 @@ export function queryFiles(sql: SqlStorage, env: Env, cursor: string | null, lim
   const scope = normalizeScope(input);
   // Keep existing newest-first cursors valid after deployment.
   const key = JSON.stringify([filters.q, filters.type, filters.author, ...(sort === 'newest' ? [] : [sort]),
-    ...(scope.folder ? [scope.uploadId, scope.folder] : [])]);
+    ...(scope.folder ? [scope.folder] : [])]);
   const noFilters = !filters.q && !filters.type && !filters.author && !scope.folder;
   let { where, params } = scopedWhere(view, scope);
   if (filters.q) {
@@ -83,7 +83,7 @@ export function queryFiles(sql: SqlStorage, env: Env, cursor: string | null, lim
       point = [parts[2] as number | string, parts[3]];
     } catch { throw new HttpError(400, 'The page cursor does not match this search, sort order, and view.'); }
   }
-  const date = view === 'trash' ? 'trashed_at' : 'created_at';
+  const date = view === 'trash' ? 'trashed_at' : 'COALESCE(NULLIF(updated_at, 0), created_at)';
   const column = sort === 'name' ? 'name COLLATE NOCASE' : date;
   const direction = sort === 'newest' ? 'DESC' : 'ASC';
   const comparison = sort === 'newest' ? '<' : '>';
@@ -95,7 +95,7 @@ export function queryFiles(sql: SqlStorage, env: Env, cursor: string | null, lim
   return {
     files: files.map(row => present(row, env)), total: count?.total ?? 0,
     nextCursor: rows.length > limit && last
-      ? encode([view, key, sort === 'name' ? last.name : view === 'trash' ? last.trashed_at : last.created_at, last.id]) : null,
+      ? encode([view, key, sort === 'name' ? last.name : view === 'trash' ? last.trashed_at : last.updated_at || last.created_at, last.id]) : null,
   };
 }
 
