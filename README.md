@@ -51,10 +51,24 @@ After a UI change, run `npm run build` again. Wrangler reloads Worker code durin
 
 ```sh
 npm run types
+npm run test:e2e:install
 npm run check
 ```
 
-The checks include TypeScript, a production UI build, and tests in the Workers runtime with local R2 and a SQLite Durable Object.
+The checks include TypeScript, a production UI build, tests in the Workers runtime, and local end-to-end tests for the browser and MCP. Install the test browser once after `npm ci`, and again after a Playwright update.
+
+## Local end-to-end tests
+
+```sh
+npm run test:e2e          # Build the app, then test the browser and MCP
+npm run test:e2e:web      # Browser tests only
+npm run test:e2e:mcp      # MCP SDK tests only; no browser is required
+npm run test:e2e:report   # Open the last HTML test report
+```
+
+The runner starts its own local Workers on free ports. Each test worker has temporary R2 and SQLite storage. Tests start with an empty shelf and can load fixed sample files through the upload API. The runner stops the servers and removes their storage when it exits.
+
+The tests cover file and folder uploads, relative assets, ZIP downloads, replacement, search, filters, Trash, expiry display, configuration, live updates, and MCP calls over HTTP. The [testing guide](docs/testing.md) describes fixtures, test commands, reports, and test limits.
 
 ## Deploy
 

@@ -1,0 +1,140 @@
+import type { BulkResult, FileFilterOptions, FilePage, Principal, SharedFile, UploadCheck } from '../shared/types';
+import { test, expect, fixtureBytes } from './fixtures';
+import { zipFixture } from './archive';
+
+test('connects with the MCP SDK, discovers tools, and returns the server identity', async ({ mcp }) => {
+  expect(mcp.client.getServerVersion()?.name).toBe('dropshelf');
+  const { tools } = await mcp.client.listTools();
+  expect(tools.map(tool => tool.name).sort()).toEqual([
+    'check_uploads', 'create_upload', 'delete_file_permanently', 'delete_files_permanently', 'get_file',
+    'get_file_filters', 'list_files', 'restore_file', 'restore_files', 'trash_file', 'trash_files', 'upload_file', 'whoami',
+  ]);
+  for (const name of ['trash_file', 'delete_file_permanently', 'upload_file']) {
+    expect(tools.find(tool => tool.name === name)?.annotations?.destructiveHint).toBe(true);
+  }
+  expect(await mcp.call<Principal>('whoami')).toEqual({
+    id: 'local-developer', email: 'e2e@example.test', label: 'e2e@example.test', kind: 'user',
+  });
+});
+
+test('uploads a folder and binary ZIP, then serves the original bytes over HTTP', async ({ mcp, shelf, app }) => {
+  const { uploadId, uploadUrl } = await mcp.call<{ uploadId: string; uploadUrl: string }>('create_upload');
+  expect(uploadUrl).toBe(`${app.appOrigin}/api/uploads/${uploadId}`);
+  const html = await fixtureBytes('site/index.html');
+  const file = await mcp.call<SharedFile>('upload_file', { uploadId, path: 'sdk-site/index.html', content: html.toString() });
+  const uploaded = [file];
+  expect(file).toMatchObject({ source: 'mcp', uploaderEmail: 'e2e@example.test', version: 1, uploadId });
+  expect(await (await shelf.http.get(file.url)).body()).toEqual(html);
+  for (const path of ['images/sample.svg', 'styles/site.css', 'scripts/site.js', 'nested/notes.md']) {
+    const bytes = await fixtureBytes(`site/${path}`);
+    const encoding = path.endsWith('.svg') ? 'base64' : 'utf8';
+    const asset = await mcp.call<SharedFile>('upload_file', {
+      uploadId, path: `sdk-site/${path}`, content: bytes.toString(encoding), encoding,
+    });
+    expect(new URL(path, file.url).href).toBe(asset.url);
+    expect(await (await shelf.http.get(asset.url)).body()).toEqual(bytes);
+    uploaded.push(asset);
+  }
+  const zip = await zipFixture();
+  const archive = await mcp.call<SharedFile>('upload_file', {
+    path: 'sdk-bundle.zip', content: zip.toString('base64'), encoding: 'base64',
+  });
+  expect(archive.contentType).toBe('application/zip');
+  const response = await shelf.http.get(archive.downloadUrl);
+  expect(response.headers()['content-disposition']).toContain('attachment');
+  expect(await response.body()).toEqual(zip);
+  expect((await shelf.files()).map(item => item.id).sort()).toEqual([...uploaded, archive].map(item => item.id).sort());
+});
+
+test('requires the current file version for replacement and keeps the shared URL', async ({ mcp, shelf, seed }) => {
+  const [checked] = await mcp.call<UploadCheck[]>('check_uploads', { paths: [seed.alpha.path] });
+  expect(checked?.existing).toMatchObject({ id: seed.alpha.id, version: 1 });
+  const rejected = await mcp.client.callTool({ name: 'upload_file', arguments: { path: seed.alpha.path, content: '# Not approved' } });
+  expect(rejected.isError).toBe(true);
+  expect(await (await shelf.http.get(seed.alpha.url)).body()).toEqual(await fixtureBytes('note.md'));
+  const content = (await fixtureBytes('replacement.md')).toString();
+  const replacement = { id: seed.alpha.id, version: checked!.existing!.version };
+  const updated = await mcp.call<SharedFile>('upload_file', { path: seed.alpha.path, content, replace: replacement });
+  expect(updated).toMatchObject({ id: seed.alpha.id, url: seed.alpha.url, version: 2, source: 'mcp' });
+  const stale = await mcp.client.callTool({ name: 'upload_file', arguments: { path: seed.alpha.path, content: '# Stale version', replace: replacement } });
+  expect(stale.isError).toBe(true);
+  expect(await (await shelf.http.get(seed.alpha.url)).text()).toBe(content);
+  expect(await mcp.call<SharedFile>('get_file', { id: seed.alpha.id })).toMatchObject({ version: 2, url: seed.alpha.url });
+});
+
+test('paginates sorted results and applies file type and author filters', async ({ mcp, seed }) => {
+  for (const name of ['zulu', 'alpha']) {
+    await mcp.call<SharedFile>('upload_file', { path: `sdk-order-${name}.md`, content: `# ${name}` });
+  }
+  const query = { q: 'sdk-order', sort: 'name', limit: 1 };
+  const first = await mcp.call<FilePage>('list_files', query);
+  expect(first.files.map(file => file.name)).toEqual(['sdk-order-alpha.md']);
+  expect(first.total).toBe(2);
+  expect(first.nextCursor).toBeTruthy();
+  const second = await mcp.call<FilePage>('list_files', { ...query, cursor: first.nextCursor });
+  expect(second.files.map(file => file.name)).toEqual(['sdk-order-zulu.md']);
+  expect(second.nextCursor).toBeNull();
+  const changed = await mcp.client.callTool({ name: 'list_files', arguments: { ...query, sort: 'oldest', cursor: first.nextCursor } });
+  expect(changed.isError).toBe(true);
+  const filters = await mcp.call<FileFilterOptions>('get_file_filters');
+  const author = filters.authors.find(item => item.label === 'e2e@example.test');
+  expect(author).toBeDefined();
+  const filtered = await mcp.call<FilePage>('list_files', { type: 'text/csv', author: author!.value });
+  expect(filtered.files.map(file => file.id)).toEqual([seed.zulu.id]);
+});
+
+test('moves files to Trash, restores links, and requires confirmation for permanent deletion', async ({ mcp, shelf, seed }) => {
+  const activeDelete = await mcp.client.callTool({ name: 'delete_file_permanently', arguments: { id: seed.alpha.id, confirm: true } });
+  expect(activeDelete.isError).toBe(true);
+  const ids = [seed.alpha.id, seed.zulu.id];
+  const moved = await mcp.call<BulkResult>('trash_files', { ids });
+  expect(moved.results).toEqual(ids.map(id => ({ id, ok: true })));
+  expect((await shelf.http.get(seed.alpha.url)).status()).toBe(404);
+  const trash = await mcp.call<FilePage>('list_files', { view: 'trash' });
+  expect(trash.files.map(file => file.id)).toEqual(expect.arrayContaining(ids));
+  const unconfirmed = await mcp.client.callTool({ name: 'delete_files_permanently', arguments: { ids } });
+  expect(unconfirmed.isError).toBe(true);
+  const restored = await mcp.call<BulkResult>('restore_files', { ids });
+  expect(restored.results.every(item => item.ok)).toBe(true);
+  expect(await (await shelf.http.get(seed.alpha.url)).body()).toEqual(await fixtureBytes('note.md'));
+  await mcp.call<SharedFile>('trash_file', { id: seed.alpha.id });
+  const file = await mcp.call<SharedFile>('restore_file', { id: seed.alpha.id });
+  expect(file.url).toBe(seed.alpha.url);
+  await mcp.call<SharedFile>('trash_file', { id: seed.alpha.id });
+  expect(await mcp.call('delete_file_permanently', { id: seed.alpha.id, confirm: true })).toEqual({ id: seed.alpha.id, deleted: true });
+  expect((await shelf.http.get(seed.alpha.url)).status()).toBe(404);
+  expect((await shelf.http.get(`/api/files/${seed.alpha.id}`)).status()).toBe(404);
+});
+
+test('rejects invalid uploads and cross-origin mutations without changing the shelf', async ({ mcp, shelf, app }) => {
+  for (const args of [
+    { path: '../outside.md', content: '# Invalid path' },
+    { path: 'program.exe', content: 'unsupported' },
+    { path: 'invalid.zip', content: '!not-base64!', encoding: 'base64' },
+    { path: 'too-large.md', content: 'A'.repeat(app.config.maxFileBytes + 1) },
+  ]) {
+    const result = await mcp.client.callTool({ name: 'upload_file', arguments: args });
+    expect(result.isError, JSON.stringify(result)).toBe(true);
+  }
+  const foreign = { Origin: 'https://untrusted.example.test' };
+  expect((await shelf.http.post('/api/uploads', { headers: foreign, data: {} })).status()).toBe(403);
+  expect((await shelf.http.post('/mcp', { headers: foreign, data: {} })).status()).toBe(403);
+  expect((await shelf.http.get(`${app.contentOrigin}/api/files`)).status()).toBe(404);
+  const forged = await shelf.http.post('/api/uploads', { data: { uploaderEmail: 'someone-else@example.test' } });
+  expect(forged.status()).toBe(400);
+  expect(await shelf.files()).toEqual([]);
+});
+
+test('uses the HTTP upload URL returned by create_upload', async ({ mcp, shelf }) => {
+  const upload = await mcp.call<{ uploadId: string; uploadUrl: string }>('create_upload');
+  const bytes = await fixtureBytes('data.csv');
+  const response = await shelf.http.put(`${upload.uploadUrl}?path=http-bridge.csv`, {
+    headers: { 'Content-Type': 'text/csv' }, data: bytes,
+  });
+  expect(response.status(), await response.text()).toBe(201);
+  const file = await response.json() as SharedFile;
+  expect(await mcp.call<SharedFile>('get_file', { id: file.id })).toMatchObject({
+    uploadId: upload.uploadId, path: 'http-bridge.csv', source: 'web', uploaderEmail: 'e2e@example.test',
+  });
+  expect(await (await shelf.http.get(file.url)).body()).toEqual(bytes);
+});

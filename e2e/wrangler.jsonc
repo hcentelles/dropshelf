@@ -1,0 +1,23 @@
+{
+  "name": "dropshelf-e2e",
+  "main": "../worker/index.ts",
+  "compatibility_date": "2026-10-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "../dist", "binding": "ASSETS", "run_worker_first": true },
+  "durable_objects": { "bindings": [{ "name": "SHELF", "class_name": "Shelf" }] },
+  "exports": { "Shelf": { "type": "durable-object", "storage": "sqlite" } },
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "dropshelf-e2e-files", "remote": false }],
+  "vars": {
+    "APP_NAME": "Drop Shelf E2E",
+    "APP_ORIGIN": "http://localhost:8787",
+    "CONTENT_ORIGIN": "http://127.0.0.1:8787",
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": "",
+    "SERVICE_TOKEN_LABELS": "{}",
+    "LOCAL_DEV_EMAIL": "e2e@example.test",
+    "MAX_FILE_BYTES": "1048576",
+    "FILE_RETENTION_DAYS": "30",
+    "TRASH_RETENTION_DAYS": "7",
+    "ALLOWED_FILE_TYPES": "image/*,.html,.htm,.md,.markdown,.csv,.pdf,.css,.js,.zip"
+  }
+}

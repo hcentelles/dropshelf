@@ -1,0 +1,1 @@
+The folder picker must skip this unsupported file.
