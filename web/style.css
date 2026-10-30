@@ -164,6 +164,26 @@ details[data-side=above][data-align=start] > .menu-panel { transform-origin: bot
 .confirm-dialog .delete-file-name { color: var(--text-secondary); font-weight: 550; overflow-wrap: anywhere; }
 .confirm-dialog .delete-file-error { color: var(--danger); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.configuration-dialog { width: min(640px, calc(100% - 32px)); padding: 0; overflow: hidden; }
+.configuration-dialog[open] { display: flex; flex-direction: column; }
+.configuration-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 24px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.configuration-header p { margin-top: 5px; }
+.configuration-header .icon-button { flex-shrink: 0; }
+.configuration-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 24px 24px; }
+.configuration-body h3 { color: var(--muted); font-size: 12px; font-weight: 600; margin: 24px 0 6px; }
+.configuration-list { margin: 0; font-size: 13px; }
+.configuration-list > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 16px; padding: 13px 0; border-bottom: 1px solid var(--border); }
+.configuration-list > div:last-child { border-bottom: 0; padding-bottom: 0; }
+.configuration-list dt { color: var(--text-secondary); }
+.configuration-list dt code { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+.configuration-list dd { margin: 0; overflow-wrap: anywhere; }
+.configuration-list small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+.configuration-types { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 5px; }
+.configuration-types code { background: var(--surface-muted); border: 1px solid var(--border); border-radius: 5px; padding: 2px 6px; font-size: 11px; }
+.configuration-dialog .configuration-note { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 16px 24px; border-top: 1px solid var(--border); font-size: 12px; flex-shrink: 0; }
+.configuration-note .ph { font-size: 16px; margin-top: 1px; }
+#configuration-error-message { color: var(--danger); }
+#configuration-retry { margin-top: 14px; }
 .replace-comparison { display: grid; gap: 12px; margin-top: 20px; padding: 16px; border: 1px solid var(--border); border-radius: 10px; }
 .replace-comparison dt { font-size: 12px; color: var(--muted); }
 .replace-comparison dd { margin: 4px 0 0; font-size: 13px; overflow-wrap: anywhere; }
@@ -344,6 +364,11 @@ tr.is-selected { background: var(--accent-bg); }
   .bulk-actions .button { flex: 1; min-height: 44px; }
   .trash-note { font-size: 12px; padding: 12px; }
   .confirm-dialog { padding: 22px; }
+  .configuration-dialog { padding: 0; max-height: calc(100dvh - 32px); }
+  .configuration-header { padding: 20px; }
+  .configuration-body { padding: 0 20px 20px; }
+  .configuration-list > div { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .configuration-dialog .configuration-note { padding: 14px 20px; }
   .dialog-actions { flex-wrap: wrap; }
   .dialog-actions .button { flex: 1; font-size: 13px; min-height: 44px; }
   .mcp-steps > li { padding: 20px 15px; gap: 11px; }

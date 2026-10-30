@@ -60,7 +60,13 @@ The checks include TypeScript, a production UI build, and tests in the Workers r
 
 Follow the [deployment guide](docs/deployment.md). It covers account login, R2, Durable Objects, email-code login, Access policies, Managed OAuth, both Workers, custom domains, verification, and updates.
 
-Keep all instance settings outside the repository. The setup script creates deployment files from a private instance file. Start with [instance.example.json](instance.example.json). Each instance has its own bucket, Durable Object namespace, Access application, and two Worker names.
+Keep deployment files outside the repository. The setup script creates them from a private input file. Start with [instance.example.json](instance.example.json). Each instance has its own bucket, Durable Object namespace, Access application, and two Worker names.
+
+## Current configuration
+
+Open the user menu and select **Configuration**. This read-only dialog loads the current Worker values each time it opens. It shows upload limits, allowed file types, expiry periods, service URLs, and the authentication mode. Each configurable value shows its environment variable name. Access configuration and secret values are not returned to the browser.
+
+Runtime settings are Cloudflare Worker environment variables or secrets, read through `env`. Manage them in **Worker → Settings → Variables and Secrets**. The private `instance.json` file is an input to the deployment script; the Worker does not read that file. Keep deployment inputs in sync with dashboard changes before a later deployment. Use secrets for credentials.
 
 ## Allowed file types
 
@@ -139,7 +145,7 @@ In Files, point to or focus the date, or open **More options**, to see the remai
 - The Trash period starts at the actual move to Trash, including a manual move. An old file still gets the full Trash period. Files in Trash are then deleted by their own Trash dates.
 - Restore starts a full new active period. Upload dates and links stay unchanged. Repeated restore calls for an already active file do not extend the period.
 
-Set `fileRetentionDays` and `trashRetentionDays` in the private instance file, generate the deployment configuration again, and redeploy. These become `FILE_RETENTION_DAYS` and `TRASH_RETENTION_DAYS`. Use whole days from `1` to `36500`, or `0` to disable a step. Missing Worker variables disable that step for older deployments. Invalid values stop the job before it changes data.
+Set the `FILE_RETENTION_DAYS` and `TRASH_RETENTION_DAYS` environment variables on the Workers. The deployment script maps `fileRetentionDays` and `trashRetentionDays` to these variables. Use whole days from `1` to `36500`, or `0` to disable a step. Missing Worker variables disable that step for older deployments. Invalid values stop the job before it changes data.
 
 Configuration changes apply to existing files and Trash. Reducing a period can make existing items due at the next check. The job deletes at most 100 files per run; a larger backlog can take more than one run. Failed deletions stay pending and retry on the next run. Deletions that already started also retry if automatic deletion is later disabled.
 

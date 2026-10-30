@@ -22,6 +22,21 @@ async function put(uploadId: string, path: string, body = '<!doctype html><h1>Te
 }
 
 describe('private file service', () => {
+  it('returns only public runtime settings for the read-only configuration view', async () => {
+    const response = await fetchApp('/api/config');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    const config = await response.json() as Record<string, unknown>;
+    expect(Object.keys(config).sort()).toEqual([
+      'allowedFileTypes', 'appOrigin', 'contentOrigin', 'local', 'maxFileBytes', 'mcpUrl', 'name', 'retention', 'user',
+    ]);
+    expect(config).toMatchObject({
+      name: env.APP_NAME, appOrigin: app, contentOrigin: content,
+      maxFileBytes: Number(env.MAX_FILE_BYTES), allowedFileTypes: env.ALLOWED_FILE_TYPES.split(','),
+      mcpUrl: `${app}/mcp`, local: true, retention: { fileDays: 30, trashDays: 7 },
+    });
+  });
+
   it('keeps folder paths, records the server identity, and serves HTML inline on the content origin', async () => {
     const id = await group();
     const response = await put(id, 'sample/index.html');

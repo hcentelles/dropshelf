@@ -14,6 +14,7 @@ import { currentScope, currentSection, initNavigation } from './navigation';
 import { initTrashView } from './trash';
 import { droppedFiles, selectedFiles, uploadFiles, type LocalFile } from './uploads';
 import { initExpiryUpdates } from './expiry';
+import { initConfiguration } from './configuration';
 
 let config: AppConfig | undefined;
 let uploading = false;
@@ -145,6 +146,7 @@ dropZone.addEventListener('drop', event => {
 });
 
 initInteractions();
+initConfiguration();
 initMcpSetup();
 initNavigation(section => {
   if (section !== 'trash') trash.leave();

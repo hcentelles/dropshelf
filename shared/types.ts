@@ -68,6 +68,8 @@ export const MAX_BULK_FILES = 10;
 export interface AppConfig {
   name: string;
   user: Principal;
+  appOrigin: string;
+  contentOrigin: string;
   maxFileBytes: number;
   allowedFileTypes: string[];
   mcpUrl: string;

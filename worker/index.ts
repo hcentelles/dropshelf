@@ -37,7 +37,9 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
       }));
     }
     if (url.pathname === '/api/config' && request.method === 'GET') {
-      return json({ name: env.APP_NAME, user, maxFileBytes: maxFileBytes(env), allowedFileTypes: allowedFileTypes(env),
+      // Return only public settings. Never serialize the environment or Access configuration.
+      return json({ name: env.APP_NAME, user, appOrigin: app.origin, contentOrigin: content.origin,
+        maxFileBytes: maxFileBytes(env), allowedFileTypes: allowedFileTypes(env),
         mcpUrl: `${app.origin}/mcp`, local: isLoopback(url.hostname), retention: retentionPolicy(env) } satisfies AppConfig);
     }
     if ((url.pathname === '/api/files' || url.pathname === '/api/explorer') && request.method === 'GET') {

@@ -32,6 +32,7 @@
                 <label class="theme-option"><input type="radio" name="theme" value="dark" /><span><i class="ph ph-moon" aria-hidden="true"></i>Dark</span></label>
               </div>
             </fieldset>
+            <button type="button" id="view-configuration" aria-haspopup="dialog" aria-controls="configuration-dialog"><i class="ph ph-sliders-horizontal" aria-hidden="true"></i> Configuration</button>
             <a href="#trash" data-section="trash"><i class="ph ph-trash" aria-hidden="true"></i> Trash</a><a href="/cdn-cgi/access/logout"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</a>
           </div>
         </details>
@@ -207,6 +208,43 @@ CF-Access-Client-Secret: YOUR_SERVICE_CLIENT_SECRET</code></pre>
       </section>
       <noscript><p class="notice">Enable JavaScript to upload and list files.</p></noscript>
     </main>
+    <dialog id="configuration-dialog" class="confirm-dialog configuration-dialog" aria-labelledby="configuration-heading" aria-describedby="configuration-description">
+      <form method="dialog" class="configuration-header">
+        <div><h2 id="configuration-heading">Configuration</h2><p id="configuration-description">Current Worker settings. Read only.</p></div>
+        <button class="icon-button" aria-label="Close configuration" autofocus><i class="ph ph-x" aria-hidden="true"></i></button>
+      </form>
+      <div class="configuration-body" id="configuration-body">
+        <p id="configuration-loading" role="status">Loading current configuration…</p>
+        <div id="configuration-error" hidden><p id="configuration-error-message" role="alert"></p><button type="button" class="button" id="configuration-retry"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Try again</button></div>
+        <div id="configuration-values" hidden>
+          <section aria-labelledby="configuration-files-heading">
+            <h3 id="configuration-files-heading">Uploads</h3>
+            <dl class="configuration-list">
+              <div><dt>Maximum file size<code>MAX_FILE_BYTES</code></dt><dd><span id="configuration-file-size"></span><small id="configuration-file-bytes"></small></dd></div>
+              <div><dt>Allowed file types<code>ALLOWED_FILE_TYPES</code></dt><dd id="configuration-file-types" class="configuration-types"></dd></div>
+            </dl>
+          </section>
+          <section aria-labelledby="configuration-expiry-heading">
+            <h3 id="configuration-expiry-heading">Automatic expiry</h3>
+            <dl class="configuration-list">
+              <div><dt>Move to Trash after<code>FILE_RETENTION_DAYS</code></dt><dd><span id="configuration-file-days"></span><small id="configuration-file-days-note"></small></dd></div>
+              <div><dt>Delete from Trash after<code>TRASH_RETENTION_DAYS</code></dt><dd><span id="configuration-trash-days"></span><small id="configuration-trash-days-note"></small></dd></div>
+            </dl>
+          </section>
+          <section aria-labelledby="configuration-service-heading">
+            <h3 id="configuration-service-heading">Service</h3>
+            <dl class="configuration-list">
+              <div><dt>App name<code>APP_NAME</code></dt><dd id="configuration-name"></dd></div>
+              <div><dt>App URL<code>APP_ORIGIN</code></dt><dd id="configuration-app-url"></dd></div>
+              <div><dt>Content URL<code>CONTENT_ORIGIN</code></dt><dd id="configuration-content-url"></dd></div>
+              <div><dt>MCP server</dt><dd id="configuration-mcp-url"></dd></div>
+              <div><dt>Authentication</dt><dd id="configuration-auth"></dd></div>
+            </dl>
+          </section>
+        </div>
+      </div>
+      <p class="configuration-note"><i class="ph ph-lock-simple" aria-hidden="true"></i><span>Managed in Cloudflare Worker variables and secrets. Secret values are not shown.</span></p>
+    </dialog>
     <dialog id="replace-file-dialog" class="confirm-dialog" aria-labelledby="replace-file-heading" aria-describedby="replace-file-description">
       <h2 id="replace-file-heading">Replace this file?</h2>
       <p id="replace-file-path" class="delete-file-name"></p>

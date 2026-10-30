@@ -67,7 +67,9 @@ Use one Access application for both hostnames so one OAuth token can reach the a
 
 Do not add a Bypass or Everyone policy. Do not expose the R2 bucket. The Worker also fails closed if Access is missing or misconfigured.
 
-## 5. Create private instance settings
+## 5. Prepare Worker environment variables
+
+All runtime settings are environment variables or secrets on the Cloudflare Workers. The app reads them through `env`. You can manage them in **Worker → Settings → Variables and Secrets**. Keep shared values consistent on both Workers. The private JSON file below prepares the deployment variables; it is not a runtime configuration store. Keep it in sync with dashboard changes before a later deployment. Store credentials as Worker secrets.
 
 Copy `instance.example.json` to a private directory outside the checkout. For example:
 
