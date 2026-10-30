@@ -28,6 +28,7 @@ export function initInteractions(): void {
   document.addEventListener('keydown', event => {
     document.documentElement.dataset.input = 'keyboard';
     if (event.key === 'Escape') {
+      for (const tooltip of document.querySelectorAll<HTMLElement>('.expiry-tooltip')) tooltip.hidden = true;
       const menus = openMenus();
       const activeMenu = menus.find(menu => event.target instanceof Node && menu.contains(event.target));
       for (const menu of menus) menu.open = false;

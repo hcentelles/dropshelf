@@ -9,6 +9,7 @@ import { shelf } from '../worker/shelf-client';
 import { restoreFile, trashFile } from '../worker/trash';
 import { database, resetDatabase } from './database';
 import worker from '../worker/index';
+import { queryExplorer } from '../worker/explorer';
 
 beforeEach(resetDatabase);
 const user = { id: 'writer', email: 'writer@example.test', label: 'Writer', kind: 'user' as const };
@@ -244,4 +245,55 @@ it('keeps restore and scheduled deletion consistent when they run at the same ti
       expect((await exports.default.fetch(file.url)).status).toBe(404);
     }
   }
+});
+
+it('reports one active expiry date for a whole root folder, across filters, nested views, and pages', async () => {
+  const now = Date.now();
+  const old = await add('site/nested/old.html', now - 20 * DAY_MS);
+  await add('site/nested/second.html', now - 19 * DAY_MS);
+  await add('site/new.css', now);
+  await add('site-other/independent.html', now - 10 * DAY_MS);
+  const expected = { firstAt: now + 30 * DAY_MS, lastAt: now + 30 * DAY_MS };
+  const root = await listExplorer(env, null, 30, 'files', { q: 'old.html' });
+  expect(root.entries[0]).toMatchObject({ path: 'site', expiry: expected });
+  const first = await listExplorer(env, null, 1, 'files', { folder: 'site/nested', sort: 'name' });
+  expect(first.entries[0]).toMatchObject({ id: old.id, expiry: expected });
+  const second = await listExplorer(env, first.nextCursor, 1, 'files', { folder: 'site/nested', sort: 'name' });
+  expect(second.entries[0]!.expiry).toEqual(expected);
+  expect((await listExplorer(env, null, 30, 'files', { folder: 'site-other' })).entries[0]!.expiry?.firstAt).toBe(now + 20 * DAY_MS);
+});
+
+it('uses the restore date in displayed expiry and still keeps the original upload date', async () => {
+  const file = await add('restored-display.html', Date.now() - 90 * DAY_MS);
+  await trashFile(env, user, file.id);
+  await restoreFile(env, file.id);
+  const restoredAt = await database(sql => sql.exec<{ restored_at: number }>('SELECT restored_at FROM files WHERE id = ?', file.id).one().restored_at);
+  const row = (await listExplorer(env, null)).entries[0]!;
+  expect(row).toMatchObject({ updatedAt: file.updatedAt, expiry: { firstAt: restoredAt + 30 * DAY_MS, lastAt: restoredAt + 30 * DAY_MS } });
+  expect(await expireAt(row.expiry!.firstAt - 1)).toBe(0);
+  expect(await expireAt(row.expiry!.firstAt)).toBe(1);
+});
+
+it('reports the full range of Trash dates for folders and each file date inside them', async () => {
+  const now = Date.now();
+  const early = await add('trash-range/early.html');
+  const late = await add('trash-range/nested/late.html');
+  for (const file of [early, late]) await trashFile(env, user, file.id);
+  await database(sql => {
+    sql.exec('UPDATE files SET trashed_at = ? WHERE id = ?', now - 5 * DAY_MS, early.id);
+    sql.exec('UPDATE files SET trashed_at = ? WHERE id = ?', now, late.id);
+  });
+  const folder = (await listExplorer(env, null, 30, 'trash', { q: 'early' })).entries[0]!;
+  expect(folder.expiry).toEqual({ firstAt: now + 2 * DAY_MS, lastAt: now + 7 * DAY_MS });
+  const nested = (await listExplorer(env, null, 30, 'trash', { folder: 'trash-range' })).entries;
+  expect(nested.find(row => row.id === early.id)!.expiry).toEqual({ firstAt: now + 2 * DAY_MS, lastAt: now + 2 * DAY_MS });
+  expect(nested.find(row => row.path === 'trash-range/nested')!.expiry).toEqual({ firstAt: now + 7 * DAY_MS, lastAt: now + 7 * DAY_MS });
+});
+
+it('reports no automatic deadline for a disabled step', async () => {
+  const file = await add('disabled-display.html');
+  const off = { ...env, FILE_RETENTION_DAYS: '0', TRASH_RETENTION_DAYS: '0' };
+  expect((await database(sql => queryExplorer(sql, off, null))).entries[0]!.expiry).toBeNull();
+  await trashFile(env, user, file.id);
+  expect((await database(sql => queryExplorer(sql, off, null, 30, 'trash'))).entries[0]!.expiry).toBeNull();
 });

@@ -13,6 +13,7 @@ import { initMcpSetup, showMcpSetupError, updateMcpSetup } from './mcp-setup';
 import { currentScope, currentSection, initNavigation } from './navigation';
 import { initTrashView } from './trash';
 import { droppedFiles, selectedFiles, uploadFiles, type LocalFile } from './uploads';
+import { initExpiryUpdates } from './expiry';
 
 let config: AppConfig | undefined;
 let uploading = false;
@@ -156,6 +157,7 @@ initNavigation(section => {
   if (section === 'trash') void trash.ensureFresh();
 });
 setUploadEnabled(false);
+initExpiryUpdates();
 async function boot(): Promise<void> {
   try {
     config = await api<AppConfig>('/api/config');

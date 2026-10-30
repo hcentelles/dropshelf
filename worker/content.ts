@@ -1,11 +1,13 @@
 import { findContent } from './files';
 import { HttpError } from './http';
+import { downloadFolder } from './archive';
 
-export async function serveContent(request: Request, env: Env): Promise<Response> {
+export async function serveContent(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response('Method not allowed.', { status: 405, headers: { Allow: 'GET, HEAD' } });
   }
   const url = new URL(request.url);
+  if (url.pathname === '/folders.zip' && request.method === 'GET') return downloadFolder(request, env, ctx);
   const match = /^\/f\/([0-9a-f-]{36})\/(.+)$/.exec(url.pathname);
   if (!match) throw new HttpError(404, 'The file was not found.');
   let path: string;
@@ -30,7 +32,7 @@ export async function serveContent(request: Request, env: Env): Promise<Response
     'Content-Security-Policy': "default-src 'self' https: data: blob:; script-src 'self' https: 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' https: 'unsafe-inline'; img-src 'self' https: data: blob:; connect-src 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'",
   });
   const name = encodeURIComponent(row.name).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16)}`);
-  headers.set('Content-Disposition', `${url.searchParams.has('download') ? 'attachment' : 'inline'}; filename*=UTF-8''${name}`);
+  headers.set('Content-Disposition', `${url.searchParams.has('download') || row.content_type === 'application/zip' ? 'attachment' : 'inline'}; filename*=UTF-8''${name}`);
   headers.set('Content-Length', String(object.size));
   if (request.headers.get('If-None-Match') === object.httpEtag) return new Response(null, { status: 304, headers });
   return new Response(body, { headers });

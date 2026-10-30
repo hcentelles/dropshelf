@@ -5,7 +5,7 @@ A private file shelf for teams. Drop files or folders, then copy links that open
 ## Features
 
 - Drop files and folders, or select them from your computer.
-- Configure allowed file types through a Worker variable. The default includes HTML, images, Markdown, CSV, PDF, CSS, and JavaScript. Skip unsupported files and report the result.
+- Configure allowed file types through a Worker variable. The default includes HTML, images, Markdown, CSV, PDF, CSS, JavaScript, and ZIP. Skip unsupported files and report the result.
 - Browse folders at each level, with parent links and browser history. Folder actions include all files below that folder.
 - Keep folder paths so relative images, CSS, and JavaScript work.
 - Keep open pages current through a live connection. Uploads, Trash changes, restores, and deletions appear without a page refresh.
@@ -15,6 +15,7 @@ A private file shelf for teams. Drop files or folders, then copy links that open
 - Use the Drop Shelf icon for browser tabs and installed web apps.
 - Select files across pages. Copy their links, move them to Trash, restore them, or delete them permanently.
 - Open or download each file through a stable, protected URL.
+- Download a complete folder as a ZIP file, including files in its subfolders.
 - Move files to Trash, restore their original links, and delete files permanently from Trash.
 - Move old files and folders to Trash automatically, then delete them after a separate Trash period. Configure both periods for each instance.
 - Use email codes to sign in with Cloudflare Access.
@@ -66,12 +67,20 @@ Keep all instance settings outside the repository. The setup script creates depl
 Set the `ALLOWED_FILE_TYPES` Worker variable to a comma-separated list of extensions or MIME types:
 
 ```text
-image/*,.html,.htm,.md,.markdown,.csv,.pdf,.css,.js
+image/*,.html,.htm,.md,.markdown,.csv,.pdf,.css,.js,.zip
 ```
 
 The browser picker, folder filter, server checks, and MCP tools use this setting. For deployment, set `allowedFileTypes` in your private instance file, generate the configuration again, and redeploy. A dashboard variable change must also be saved in that private file so a later deployment does not replace it.
 
 PDF links open in the browser PDF viewer. Markdown and CSV links open as UTF-8 text in the browser. Download links keep the original bytes, name, and media type. Existing file links stay valid when you change the upload allowlist.
+
+ZIP uploads keep their original bytes. The server does not extract them. ZIP links download the file.
+
+## Download a folder
+
+Open the folder's **More options** menu and select **Download folder as ZIP**. The ZIP contains the selected folder and all its active files, including subfolders and files from separate uploads. Search filters do not restrict the download. Files in Trash are excluded.
+
+The content Worker streams and compresses one file at a time from private R2. Access protects the download. The server does not create a stored ZIP copy or load the complete folder into memory. ZIP64 supports archives larger than 4 GiB. A folder download supports up to 5,000 files; Worker plan limits can be lower. If a required file becomes unavailable, the download fails. Retry after the file list is current.
 
 ## Connect an agent
 
@@ -122,6 +131,8 @@ Permanent deletion removes the R2 object and file record. Link reservations, the
 ## Automatic expiry
 
 The default settings move files to Trash after **30 days**, then delete them permanently after **7 days in Trash**. An hourly job runs on the app Worker, including when no browser is open. Actions occur on the next successful check after each period ends.
+
+In Files, point to or focus the date, or open **More options**, to see the remaining time and exact expiry date. In Trash, the **Deletes in** column stays visible. On a phone, this value appears below the file name. A Trash folder with different deletion dates shows a range. The values update each minute while the page is visible.
 
 - A file at the root uses its last completed upload, replacement, or restore date. Opening, downloading, or previewing a file does not extend its life.
 - A top-level folder is one expiry group. Its date is the latest upload, replacement, or restore among its active files, including nested folders and files from other upload groups. The whole group moves to Trash together. A pending upload blocks expiry for that group. This keeps HTML pages and their assets together.

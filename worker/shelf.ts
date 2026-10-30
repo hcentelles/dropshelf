@@ -8,6 +8,7 @@ import { initializeSchema } from './schema';
 import { UploadStore } from './upload-store';
 import { retentionPolicy } from '../shared/retention';
 import { beginExpiredDeletion, moveExpiredToTrash } from './retention-store';
+import { folderArchiveFiles } from './archive-store';
 
 // One object owns the metadata and live connections for one private shelf.
 // The Workers stream file bodies directly to and from R2.
@@ -37,6 +38,8 @@ export class Shelf extends DurableObject<Env> {
   listExplorer(cursor: string | null, limit = 30, view: FileView = 'files', input: FileQuery = {}) {
     return queryExplorer(this.ctx.storage.sql, this.env, cursor, limit, view, input);
   }
+
+  folderArchiveFiles(folder: string) { return folderArchiveFiles(this.ctx.storage.sql, folder); }
 
   getFileFilters(view: FileView = 'files', scope: FileScope = {}) {
     return queryFileFilters(this.ctx.storage.sql, view, scope);

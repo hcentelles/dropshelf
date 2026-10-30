@@ -76,7 +76,7 @@ mkdir -p "$HOME/.config/dropshelf/demo"
 cp instance.example.json "$HOME/.config/dropshelf/demo/instance.json"
 ```
 
-Edit that copied file. Set the account ID, bucket, exact app and content origins, Access team domain, and AUD tag. Change `appName` to set the name shown in the UI. Set `allowedFileTypes` to the allowed extensions and MIME types, such as `image/*,.html,.htm,.md,.markdown,.csv,.pdf,.css,.js`. This becomes the `ALLOWED_FILE_TYPES` Worker variable. The two Worker names are `name` and `name-content`.
+Edit that copied file. Set the account ID, bucket, exact app and content origins, Access team domain, and AUD tag. Change `appName` to set the name shown in the UI. Set `allowedFileTypes` to the allowed extensions and MIME types, such as `image/*,.html,.htm,.md,.markdown,.csv,.pdf,.css,.js,.zip`. This becomes the `ALLOWED_FILE_TYPES` Worker variable. The two Worker names are `name` and `name-content`.
 
 Set `fileRetentionDays` and `trashRetentionDays` for automatic expiry. The defaults are `30` and `7`. Use whole days from `1` to `36500`, or `0` to disable either step. These values become `FILE_RETENTION_DAYS` and `TRASH_RETENTION_DAYS`. A root file or top-level folder moves to Trash after the first period. Files are deleted after the second period starts at the move to Trash. See [automatic expiry](../README.md#automatic-expiry) for folder and restore rules.
 

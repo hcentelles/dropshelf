@@ -2,6 +2,8 @@ import type { ExplorerPage, FileQuery, FileView, SharedFolder } from '../shared/
 import { present, type FileRow } from './file-record';
 import { decode, encode, normalize, normalizeScope, scopedWhere } from './file-query';
 import { HttpError } from './http';
+import { DAY_MS, retentionPolicy } from '../shared/retention';
+import { activeExpiryDates, retentionRoot } from './retention-store';
 
 type EntryRow = FileRow & {
   entry_id: string;
@@ -15,6 +17,7 @@ type EntryRow = FileRow & {
   entry_uploader: string;
   entry_source: 'web' | 'mcp';
   entry_trashed: number | null;
+  entry_first_trashed: number | null;
   entry_actor: string | null;
   entry_pending: number;
   entry_date: number;
@@ -60,7 +63,8 @@ export function queryExplorer(sql: SqlStorage, env: Env, cursor: string | null, 
       MAX(COALESCE(NULLIF(updated_at, 0), created_at)) AS entry_updated,
       CASE WHEN COUNT(DISTINCT uploader_id) > 1 THEN 'Multiple users' ELSE MAX(uploader_label) END AS entry_uploader,
       CASE WHEN COUNT(DISTINCT source) > 1 THEN 'web' ELSE MAX(source) END AS entry_source,
-      MAX(trashed_at) AS entry_trashed, MAX(delete_started_at IS NOT NULL) AS entry_pending,
+      MAX(trashed_at) AS entry_trashed, MIN(trashed_at) AS entry_first_trashed,
+      MAX(delete_started_at IS NOT NULL) AS entry_pending,
       CASE WHEN COUNT(DISTINCT trashed_by_id) > 1 THEN 'Multiple users' ELSE MAX(trashed_by_label) END AS entry_actor,
       MAX(${view === 'trash' ? 'trashed_at' : 'COALESCE(NULLIF(updated_at, 0), created_at)'}) AS entry_date, MAX(matches) AS matches
     FROM tagged GROUP BY entry_id
@@ -88,13 +92,23 @@ export function queryExplorer(sql: SqlStorage, env: Env, cursor: string | null, 
   const count = sql.exec<{ total: number }>(`${cte} SELECT COUNT(*) AS total FROM grouped WHERE matches = 1`, ...bindings).one();
   const page = rows.slice(0, limit);
   const last = page.at(-1);
+  const policy = retentionPolicy(env);
+  const activeDates = view === 'files' ? activeExpiryDates(sql, page.map(row => row.entry_path), policy.fileDays) : new Map<string, number>();
   return {
-    entries: page.map(row => row.folder_rank === 1 ? present(row, env) : {
+    entries: page.map(row => {
+      const firstAt = view === 'files' ? activeDates.get(retentionRoot(row.entry_path))
+        : policy.trashDays && row.entry_first_trashed !== null ? row.entry_first_trashed + policy.trashDays * DAY_MS : undefined;
+      const expiry = firstAt === undefined ? null : {
+        firstAt, lastAt: view === 'trash' ? row.entry_trashed! + policy.trashDays * DAY_MS : firstAt,
+      };
+      return { ...(row.folder_rank === 1 ? present(row, env) : {
       kind: 'folder', id: row.entry_id, path: row.entry_path, name: row.entry_name,
       size: row.entry_size, fileCount: row.file_count, uploaderLabel: row.entry_uploader, source: row.entry_source,
       createdAt: row.entry_created, updatedAt: row.entry_updated, trashedAt: row.entry_trashed, trashedBy: row.entry_actor,
       deletionPending: !!row.entry_pending,
-    } satisfies SharedFolder),
+      downloadUrl: `${new URL(env.CONTENT_ORIGIN).origin}/folders.zip?path=${encodeURIComponent(row.entry_path)}`,
+      } satisfies SharedFolder), expiry };
+    }),
     total: count?.total ?? 0,
     nextCursor: rows.length > limit && last
       ? encode([view, key, last.folder_rank, sort === 'name' ? last.entry_name : last.entry_date, last.entry_id]) : null,

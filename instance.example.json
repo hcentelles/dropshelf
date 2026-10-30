@@ -10,6 +10,6 @@
   "maxFileBytes": 104857600,
   "fileRetentionDays": 30,
   "trashRetentionDays": 7,
-  "allowedFileTypes": "image/*,.html,.htm,.md,.markdown,.csv,.pdf,.css,.js",
+  "allowedFileTypes": "image/*,.html,.htm,.md,.markdown,.csv,.pdf,.css,.js,.zip",
   "serviceTokenLabels": {}
 }

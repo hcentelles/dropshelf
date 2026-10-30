@@ -1,5 +1,5 @@
 import { fileTypeLabel } from '../shared/formats';
-import type { ExplorerPage, FileScope, FileQuery, FileSort, FileFilterOptions, FilePage, FileView, SharedFile, ShelfEntry } from '../shared/types';
+import type { ExplorerEntry, ExplorerPage, FileScope, FileQuery, FileSort, FileFilterOptions, FilePage, FileView, SharedFile } from '../shared/types';
 import { api, element, identityLabel } from './api';
 
 export function fileQuery(view: FileView, filters: FileQuery, cursor?: string | null, limit?: number, explorer = false): string {
@@ -15,8 +15,8 @@ export function fileQuery(view: FileView, filters: FileQuery, cursor?: string | 
   return `/api/${explorer ? 'explorer' : 'files'}?${query}`;
 }
 
-export async function collectEntries(view: FileView, filters: FileQuery, signal?: AbortSignal): Promise<ShelfEntry[]> {
-  const entries = new Map<string, ShelfEntry>();
+export async function collectEntries(view: FileView, filters: FileQuery, signal?: AbortSignal): Promise<ExplorerEntry[]> {
+  const entries = new Map<string, ExplorerEntry>();
   const cursors = new Set<string>();
   let cursor: string | null = null;
   do {

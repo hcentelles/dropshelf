@@ -2,7 +2,7 @@ const formats: Record<string, string> = {
   html: 'text/html', htm: 'text/html',
   md: 'text/markdown', markdown: 'text/markdown', csv: 'text/csv',
   txt: 'text/plain', json: 'application/json', css: 'text/css', js: 'text/javascript',
-  mjs: 'text/javascript', pdf: 'application/pdf', xml: 'application/xml',
+  mjs: 'text/javascript', pdf: 'application/pdf', xml: 'application/xml', zip: 'application/zip',
   png: 'image/png', apng: 'image/apng', jpg: 'image/jpeg', jpeg: 'image/jpeg',
   jfif: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif',
   svg: 'image/svg+xml', ico: 'image/vnd.microsoft.icon', cur: 'image/x-icon',
@@ -27,7 +27,7 @@ export function fileType(path: string, declaredType = ''): string {
   return /^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/.test(mime) ? mime : 'application/octet-stream';
 }
 
-export const DEFAULT_ALLOWED_FILE_TYPES = 'image/*,.html,.htm,.md,.markdown,.csv,.pdf,.css,.js';
+export const DEFAULT_ALLOWED_FILE_TYPES = 'image/*,.html,.htm,.md,.markdown,.csv,.pdf,.css,.js,.zip';
 
 export function parseAllowedFileTypes(value: string): string[] {
   if (typeof value !== 'string' || value.length > 2048) throw new Error('The file type setting is not valid.');
@@ -51,7 +51,7 @@ export function describeAllowedTypes(allowed: string[]): string {
     '.md': 'Markdown', '.markdown': 'Markdown', 'text/markdown': 'Markdown',
     '.csv': 'CSV', 'text/csv': 'CSV',
     '.css': 'CSS', 'text/css': 'CSS', '.js': 'JavaScript', 'text/javascript': 'JavaScript',
-    '.pdf': 'PDF', 'application/pdf': 'PDF',
+    '.pdf': 'PDF', 'application/pdf': 'PDF', '.zip': 'ZIP', 'application/zip': 'ZIP',
   };
   const labels = [...new Set(allowed.map(pattern => names[pattern] ?? pattern))];
   return new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(labels);
@@ -66,7 +66,7 @@ export function fileTypeLabel(type: string): string {
   const labels: Record<string, string> = {
     'image/*': 'Images', 'text/html': 'HTML', 'text/markdown': 'Markdown', 'text/csv': 'CSV',
     'application/pdf': 'PDF', 'text/plain': 'Text', 'application/json': 'JSON',
-    'text/css': 'CSS', 'text/javascript': 'JavaScript',
+    'text/css': 'CSS', 'text/javascript': 'JavaScript', 'application/zip': 'ZIP',
   };
   return labels[type] ?? type;
 }

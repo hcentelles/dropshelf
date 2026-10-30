@@ -1,4 +1,4 @@
-import { isFolder, type ExplorerPage, type FileScope, type FileView, type SharedFile, type ShelfEntry } from '../shared/types';
+import { isFolder, type ExplorerEntry, type ExplorerPage, type FileScope, type FileView, type SharedFile, type ShelfEntry } from '../shared/types';
 import { api, element, icon, toast } from './api';
 import { collectEntries, collectFiles, fileQuery, initFileSearch } from './file-search';
 import { renderBreadcrumbs } from './navigation';
@@ -6,7 +6,7 @@ import { renderBreadcrumbs } from './navigation';
 interface FileListOptions {
   prefix: string;
   view: FileView;
-  render: (file: ShelfEntry) => HTMLTableRowElement;
+  render: (file: ExplorerEntry) => HTMLTableRowElement;
   canAutoLoad?: () => boolean;
   onState?: (state: { total: number; busy: boolean; inFolder: boolean }) => void;
 }
@@ -18,8 +18,8 @@ export function createFileList(options: FileListOptions) {
   const header = node('select-all') as HTMLInputElement;
   const toolbar = node('bulk-toolbar');
   const matching = node('select-matching') as HTMLButtonElement;
-  const records = new Map<string, ShelfEntry>();
-  const selection = new Map<string, ShelfEntry>();
+  const records = new Map<string, ExplorerEntry>();
+  const selection = new Map<string, ExplorerEntry>();
   let scope: FileScope = {};
   let cursor: string | null = null;
   let total = 0;
@@ -86,7 +86,7 @@ export function createFileList(options: FileListOptions) {
     sync();
   }
 
-  function append(file: ShelfEntry, prepend = false): void {
+  function append(file: ExplorerEntry, prepend = false): void {
     if (records.has(file.id)) return;
     records.set(file.id, file);
     const row = options.render(file);
@@ -166,7 +166,7 @@ export function createFileList(options: FileListOptions) {
     request = controller;
     const started = revision;
     try {
-      const next = new Map<string, ShelfEntry>();
+      const next = new Map<string, ExplorerEntry>();
       let nextCursor: string | null = null;
       let count = 0;
       let target = Math.max(records.size, selection.size, 30);

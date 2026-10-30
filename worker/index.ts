@@ -20,7 +20,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
     throw new HttpError(403, 'This hostname is not configured for this instance.');
   }
   const user = await authenticate(request, env);
-  if (url.origin === content.origin) return serveContent(request, env);
+  if (url.origin === content.origin) return serveContent(request, env, ctx);
   if (url.pathname === '/mcp') {
     checkBrowserOrigin(request, app.origin);
     if (request.method === 'POST') {

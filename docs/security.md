@@ -28,7 +28,9 @@ HTML that needs network API calls needs a deliberate policy change. Assess that 
 
 The `ALLOWED_FILE_TYPES` Worker variable controls new uploads. Both the client and server enforce it. Known extensions set the canonical media type, so a client cannot label a known HTML or Markdown file as an image to bypass an image-only setting. For unknown formats, the supplied media type can match a configured MIME pattern. This is an upload policy, not a file-content scanner.
 
-The app stores the original bytes. It does not scan files for malware, convert image formats, or guarantee that an image decoder accepts a file. A raster preview is optional. Markdown and CSV previews use `text/plain` so their contents display as text. Treat files as content from team members.
+The app stores the original bytes. It does not scan files for malware, convert image formats, extract ZIP uploads, or guarantee that an image decoder accepts a file. A raster preview is optional. Markdown and CSV previews use `text/plain` so their contents display as text. Treat files as content from team members.
+
+Folder ZIP downloads require Access authentication and use the separate content origin with an attachment header. Only active files are included. The download captures the file paths and object keys at its start. An unavailable object causes the stream to fail. Download cancellation stops compression and further file reads. ZIP downloads do not change expiry dates or create stored archive copies.
 
 ## Requests and storage
 

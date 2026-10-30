@@ -1,7 +1,8 @@
 import { canPreview, formatSize } from '../shared/formats';
-import { isFolder, type ShelfEntry } from '../shared/types';
+import { isFolder, type ExplorerEntry, type ShelfEntry } from '../shared/types';
 import { copy, icon, identityLabel, initials } from './api';
 import { entryUrl } from './navigation';
+import { expiryDisplay, refreshExpiryDisplay } from './expiry';
 
 function text(tag: string, value: string, className = ''): HTMLElement {
   const node = document.createElement(tag);
@@ -26,7 +27,7 @@ interface FileActions {
   deletePermanently?: (file: ShelfEntry) => void;
 }
 
-export function fileRow(file: ShelfEntry, fresh: boolean, callbacks: FileActions): HTMLTableRowElement {
+export function fileRow(file: ExplorerEntry, fresh: boolean, callbacks: FileActions): HTMLTableRowElement {
   const folder = isFolder(file);
   const inTrash = file.trashedAt !== null;
   const url = entryUrl(file, inTrash ? 'trash' : 'files');
@@ -91,8 +92,38 @@ export function fileRow(file: ShelfEntry, fresh: boolean, callbacks: FileActions
   const time = document.createElement('time');
   time.dateTime = new Date(dateValue).toISOString();
   time.textContent = new Intl.DateTimeFormat('en', { day: 'numeric', month: 'short', year: 'numeric' }).format(dateValue);
-  time.title = new Date(dateValue).toLocaleString('en');
-  date.append(time);
+  if (inTrash) {
+    time.title = new Date(dateValue).toLocaleString('en');
+    date.append(time);
+  } else {
+    const dateDetails = text('div', '', 'date-details');
+    const trigger = document.createElement('button');
+    trigger.className = 'date-trigger';
+    trigger.type = 'button';
+    trigger.setAttribute('aria-label', `${time.textContent}. Show expiry for ${file.name}`);
+    trigger.append(time);
+    const tooltip = expiryDisplay(file);
+    tooltip.classList.add('expiry-tooltip');
+    tooltip.id = `expiry-${crypto.randomUUID()}`;
+    tooltip.setAttribute('role', 'tooltip');
+    tooltip.hidden = true;
+    trigger.setAttribute('aria-describedby', tooltip.id);
+    const show = () => {
+      refreshExpiryDisplay(tooltip);
+      tooltip.hidden = false;
+      delete dateDetails.dataset.side;
+      const headerBottom = document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 0;
+      if (tooltip.getBoundingClientRect().top < headerBottom + 8) dateDetails.dataset.side = 'below';
+    };
+    dateDetails.addEventListener('pointerenter', show);
+    dateDetails.addEventListener('pointerleave', () => { if (document.activeElement !== trigger) tooltip.hidden = true; });
+    trigger.addEventListener('focus', show);
+    trigger.addEventListener('click', show);
+    trigger.addEventListener('blur', () => { if (!dateDetails.matches(':hover')) tooltip.hidden = true; });
+    trigger.addEventListener('keydown', event => { if (event.key === 'Escape') { tooltip.hidden = true; event.preventDefault(); } });
+    dateDetails.append(trigger, tooltip);
+    date.append(dateDetails);
+  }
   const actions = document.createElement('td');
   actions.className = 'col-actions';
   const controls = text('div', '', 'row-actions');
@@ -113,6 +144,13 @@ export function fileRow(file: ShelfEntry, fresh: boolean, callbacks: FileActions
   summary.setAttribute('aria-label', `More options for ${file.name}`);
   summary.append(icon('dots-three'));
   const panel = text('div', '', 'menu-panel');
+  const expiry = expiryDisplay(file);
+  expiry.id = `expiry-${crypto.randomUUID()}`;
+  summary.setAttribute('aria-describedby', expiry.id);
+  const expiryInfo = text('div', '', 'menu-expiry');
+  expiryInfo.append(icon('clock'), expiry);
+  panel.append(expiryInfo);
+  menu.addEventListener('toggle', () => { if (menu.open) refreshExpiryDisplay(expiry); });
   const remove = document.createElement('button');
   remove.className = 'menu-danger';
   remove.append(icon('trash'), text('span', inTrash ? file.deletionPending ? 'Retry permanent delete' : 'Delete permanently' : 'Move to Trash'));
@@ -126,16 +164,24 @@ export function fileRow(file: ShelfEntry, fresh: boolean, callbacks: FileActions
     open.prepend(icon(folder ? 'folder-open' : 'arrow-square-out'));
     panel.append(open);
   }
-  if (!inTrash && !folder) {
-    const download = link('Download file', file.downloadUrl);
+  if (!inTrash) {
+    const download = link(folder ? 'Download folder as ZIP' : 'Download file', file.downloadUrl, '', !folder);
     download.prepend(icon('download-simple'));
+    download.addEventListener('click', () => { menu.open = false; });
     panel.append(download);
   }
   panel.append(remove);
   menu.append(summary, panel);
   controls.append(copyButton, menu);
   actions.append(controls);
-  row.append(nameCell, uploader, linkCell, date, actions);
+  row.append(nameCell, uploader, linkCell, date);
+  if (inTrash) {
+    const expiryCell = document.createElement('td');
+    expiryCell.className = 'col-expiry';
+    expiryCell.append(expiryDisplay(file, true));
+    row.append(expiryCell);
+  }
+  row.append(actions);
   for (const cell of row.cells) cell.setAttribute('role', 'cell');
   return row;
 
