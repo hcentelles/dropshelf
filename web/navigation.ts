@@ -47,7 +47,10 @@ export function initNavigation(onSection: (section: Section) => void): void {
 
   function show(focus: boolean): void {
     const section = currentSection();
-    element('current-section').textContent = section === 'trash' ? 'Trash' : section === 'mcp' ? 'Connect MCP' : 'Files';
+    const label = element('current-section');
+    label.textContent = section === 'trash' ? 'Trash' : section === 'mcp' ? 'Connect MCP' : '';
+    label.hidden = section === 'files';
+    element('section-divider').hidden = section === 'files';
     if (focus) scroll.set(previous, window.scrollY);
     for (const [name, nodes] of Object.entries(sections)) nodes.view.hidden = name !== section;
     for (const menu of document.querySelectorAll<HTMLDetailsElement>('.account-menu[open]')) menu.open = false;

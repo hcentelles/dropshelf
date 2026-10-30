@@ -18,7 +18,7 @@
     <a class="skip-link" href="#main-content">Skip to content</a>
     <header class="topbar">
       <a class="brand" href="/"><img src="/assets/icons/drop-shelf.svg" alt="" width="32" height="32" /><span id="brand">Drop Shelf</span></a>
-      <span class="brand-divider" aria-hidden="true"></span><span class="brand-section" id="current-section">Files</span>
+      <span class="brand-divider" id="section-divider" aria-hidden="true" hidden></span><span class="brand-section" id="current-section" hidden></span>
       <div class="account">
         <span class="access-label"><i class="ph ph-lock-simple" aria-hidden="true"></i> Team access</span>
         <details class="account-menu">
@@ -39,7 +39,7 @@
     </header>
     <main id="main-content" tabindex="-1">
       <div id="files-view">
-      <div class="page-heading-row"><div class="page-heading"><h1 id="files-page-heading" tabindex="-1">Shared files</h1><p>Quickly upload and share temporary files with your team, manually or through agents. You must use the Knowledge Base or Google Drive instead of this tool for permanent content. HTML, PDFs, and images open in the browser. Only team members can access files and links.</p></div><a class="button" href="#mcp" id="connect-mcp" data-section="mcp"><i class="ph ph-plugs-connected" aria-hidden="true"></i> Connect MCP</a></div>
+      <div class="page-heading-row"><div class="page-heading"><h1 class="sr-only" id="files-page-heading" tabindex="-1">Shared files</h1><p>Quickly upload and share temporary files with your team, manually or through agents. You must use the Knowledge Base or Google Drive instead of this tool for permanent content. HTML, PDFs, and images open in the browser. Only team members can access files and links.</p></div><a class="button" href="#mcp" id="connect-mcp" data-section="mcp"><i class="ph ph-plugs-connected" aria-hidden="true"></i> Connect MCP</a></div>
       <section class="drop-zone" id="drop-zone" aria-label="File upload" aria-busy="false">
         <div class="upload-copy"><i class="ph ph-cloud-arrow-up upload-icon" aria-hidden="true"></i><div><h2>Drop files or folders here</h2><p id="supported-types">Loading supported file types…</p><span class="upload-limit" id="upload-limit">Loading upload settings…</span></div></div>
         <div class="upload-actions"><button class="button primary" id="select-files"><i class="ph ph-upload-simple" aria-hidden="true"></i> <span>Upload files</span></button><button class="button" id="select-folder"><i class="ph ph-folder-open" aria-hidden="true"></i> <span>Select folder</span></button></div>

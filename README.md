@@ -76,7 +76,7 @@ PDF links open in the browser PDF viewer. Markdown and CSV links open as UTF-8 t
 
 Add `https://YOUR_APP_HOST/mcp` as a remote HTTP MCP server in your client. Select OAuth and complete the Access login. The client must support OAuth resource indicators (RFC 8707).
 
-In the web app, select **Connect MCP** beside the **Shared files** heading. The first section has generic setup instructions that you can copy and paste into an agent. The page also shows manual setup steps, the instance URL, available tools, and upload limits.
+In the web app, select **Connect MCP** above the upload area. The first section has generic setup instructions that you can copy and paste into an agent. The page also shows manual setup steps, the instance URL, available tools, and upload limits.
 
 Available tools:
 
