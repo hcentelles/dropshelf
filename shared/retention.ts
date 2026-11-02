@@ -1,6 +1,9 @@
 export const DAY_MS = 24 * 60 * 60_000;
 export const DEFAULT_FILE_RETENTION_DAYS = 30;
 export const DEFAULT_TRASH_RETENTION_DAYS = 7;
+export const EXTENDED_RETENTION_DAYS = 30;
+
+export type RetentionMode = '30-days' | 'permanent';
 
 export interface RetentionPolicy { fileDays: number; trashDays: number }
 

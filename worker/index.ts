@@ -1,7 +1,7 @@
 import type { AppConfig, FileSort, FileView } from '../shared/types';
 import { authenticate } from './auth';
 import { serveContent } from './content';
-import { checkUploads, createUpload, getFile, listFiles, thumbnail, uploadFile } from './files';
+import { checkUploads, createUpload, getFile, listFiles, setFileRetention, thumbnail, uploadFile } from './files';
 import { allowedFileTypes, checkBrowserOrigin, HttpError, isHttpError, isLoopback, json, maxFileBytes, origins, readBody, readJson, secureResponse } from './http';
 import { handleMcp, MAX_MCP_BODY } from './mcp';
 import { deleteFilePermanently, restoreFile, trashFile } from './trash';
@@ -9,7 +9,7 @@ import { getFileFilters, listExplorer } from './files';
 import { shelf } from './shelf-client';
 import { manageFiles } from './bulk';
 import type { BulkAction } from '../shared/types';
-import { retentionPolicy } from '../shared/retention';
+import { retentionPolicy, type RetentionMode } from '../shared/retention';
 import { runRetention } from './retention';
 export { Shelf } from './shelf';
 
@@ -54,6 +54,14 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
     if (url.pathname === '/api/files/filters' && request.method === 'GET') {
       return json(await getFileFilters(env, (url.searchParams.get('view') ?? 'files') as FileView,
         { uploadId: url.searchParams.get('uploadId') ?? '', folder: url.searchParams.get('folder') ?? '' }));
+    }
+    if (url.pathname === '/api/files/retention' && request.method === 'POST') {
+      const payload = await readJson(request);
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
+        Object.keys(payload).length !== 2 || !('id' in payload) || !('mode' in payload)) {
+        throw new HttpError(400, 'Send an item ID and expiry mode.');
+      }
+      return json(await setFileRetention(env, payload.id as string, payload.mode as RetentionMode));
     }
     if (url.pathname === '/api/files/bulk' && request.method === 'POST') {
       const payload = await readJson(request);

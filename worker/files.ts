@@ -3,10 +3,14 @@ import type { ExplorerPage, FileFilterOptions, FilePage, FileQuery, FileScope, F
 import type { FileRow } from './file-record';
 import { allowedFileTypes, cleanPath, HttpError, maxFileBytes } from './http';
 import { shelf } from './shelf-client';
+import type { RetentionMode } from '../shared/retention';
 
 export async function createUpload(env: Env, user: Principal): Promise<string> { return shelf(env).createUpload(user); }
 export async function checkUploads(env: Env, paths: string[]): Promise<UploadCheck[]> { return shelf(env).checkUploads(paths); }
 export async function getFile(env: Env, id: string): Promise<SharedFile> { return shelf(env).getFile(id); }
+export async function setFileRetention(env: Env, id: string, mode: RetentionMode) {
+  return shelf(env).setRetention(id, mode);
+}
 export async function listFiles(env: Env, cursor: string | null, limit = 30, view: FileView = 'files', input: FileQuery = {}): Promise<FilePage> {
   return shelf(env).listFiles(cursor, limit, view, input);
 }

@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
-import type { SharedFile } from '../shared/types';
+import type { ExplorerPage, SharedFile } from '../shared/types';
+import { DAY_MS } from '../shared/retention';
 import { test, expect, fixtureBytes, fixturePath } from './fixtures';
 import { downloadBytes, unzip, zipFixture } from './archive';
 
@@ -215,5 +216,77 @@ test('keeps folder navigation and Trash expiry usable at phone width', async ({ 
   await expect(row(page, 'index.html')).toBeVisible();
   await openTrash(page);
   await expect(row(page, seed.trashed.name, true).locator('.expiry-mobile-summary')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
+test('changes file expiry from short menu actions and updates another open page', async ({ page, app, shelf, seed }) => {
+  const second = await page.context().newPage();
+  await Promise.all([page.goto(app.appOrigin), second.goto(app.appOrigin)]);
+  const file = row(page, seed.alpha.name);
+  await file.getByLabel(`More options for ${seed.alpha.name}`).click();
+  await expect(file.getByRole('button', { name: 'Keep 30 days', exact: true })).toBeVisible();
+  await file.getByRole('button', { name: 'Make permanent', exact: true }).click();
+  await expect(file.locator('.permanent-badge')).toHaveText('Permanent');
+  await expect(row(second, seed.alpha.name).locator('.permanent-badge')).toHaveText('Permanent');
+  await file.getByRole('button', { name: /Show expiry for alpha\.md/ }).focus();
+  await expect(file.getByRole('tooltip')).toContainText('Never expires');
+  await file.getByRole('button', { name: /Show expiry for alpha\.md/ }).press('Escape');
+  await page.reload();
+  await expect(file.locator('.permanent-badge')).toBeVisible();
+  const before = Date.now();
+  await file.getByLabel(`More options for ${seed.alpha.name}`).click();
+  await file.getByRole('button', { name: 'Keep 30 days', exact: true }).click();
+  await expect(file.locator('.permanent-badge')).toHaveCount(0);
+  await expect(row(second, seed.alpha.name).locator('.permanent-badge')).toHaveCount(0);
+  const response = await shelf.http.get('/api/explorer');
+  const entry = (await response.json() as ExplorerPage).entries.find(item => item.id === seed.alpha.id)!;
+  expect(entry.expiry!.firstAt).toBeGreaterThanOrEqual(before + 30 * DAY_MS);
+  expect(entry.expiry!.lastAt).toBeLessThanOrEqual(Date.now() + 30 * DAY_MS);
+  expect(await (await shelf.http.get(`/api/files/${seed.alpha.id}`)).json()).toEqual(seed.alpha);
+  await second.close();
+});
+
+test('applies folder expiry to hidden descendants and future uploads', async ({ page, app, shelf, seed }) => {
+  const marked = await shelf.http.post('/api/files/retention', { data: { id: seed.page.id, mode: 'permanent' } });
+  expect(marked.ok()).toBe(true);
+  await page.goto(app.appOrigin);
+  await expect(row(page, 'site').locator('.permanent-badge')).toHaveText('Some permanent');
+  await page.locator('#search').fill('index');
+  await expect(page.locator('#file-list > tr')).toHaveCount(1);
+  await row(page, 'site').getByLabel('More options for site').click();
+  await row(page, 'site').getByRole('button', { name: 'Make permanent', exact: true }).click();
+  await expect(row(page, 'site').locator('.permanent-badge')).toHaveText('Permanent');
+  await page.locator('#clear-filters').click();
+  await row(page, 'site').getByRole('link', { name: 'site', exact: true }).click();
+  await expect(row(page, 'nested').locator('.permanent-badge')).toHaveText('Permanent');
+  await expect(row(page, 'index.html').locator('.permanent-badge')).toHaveText('Permanent');
+  const later = await shelf.upload('site/later.md', Buffer.from('# Later upload\n'));
+  await expect(row(page, later.name).locator('.permanent-badge')).toHaveText('Permanent');
+  await page.getByRole('navigation', { name: 'Folder path' }).getByRole('link', { name: 'All files' }).click();
+  await row(page, 'site').getByLabel('More options for site').click();
+  await row(page, 'site').getByRole('button', { name: 'Keep 30 days', exact: true }).click();
+  await expect(row(page, 'site').locator('.permanent-badge')).toHaveCount(0);
+  await row(page, 'site').getByRole('link', { name: 'site', exact: true }).click();
+  await expect(row(page, 'index.html')).toBeVisible();
+  await expect(page.locator('#file-list .permanent-badge')).toHaveCount(0);
+  await row(page, 'nested').getByRole('link', { name: 'nested', exact: true }).click();
+  await expect(row(page, 'notes.md')).toBeVisible();
+  await expect(row(page, 'notes.md').locator('.permanent-badge')).toHaveCount(0);
+});
+
+test('shows permanent marks and single-line menu actions at phone width', async ({ page, app, seed }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(app.appOrigin);
+  for (const name of [seed.alpha.name, 'site']) {
+    const item = row(page, name);
+    await item.getByLabel(`More options for ${name}`).click();
+    for (const label of ['Keep 30 days', 'Make permanent']) {
+      const action = item.getByRole('button', { name: label, exact: true });
+      await expect(action).toBeVisible();
+      expect(await action.locator('span').evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(24);
+    }
+    await item.getByRole('button', { name: 'Make permanent', exact: true }).click();
+    await expect(item.locator('.permanent-badge')).toHaveText('Permanent');
+  }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });

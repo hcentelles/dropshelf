@@ -3,7 +3,7 @@ import { present, type FileRow } from './file-record';
 import { decode, encode, normalize, normalizeScope, scopedWhere } from './file-query';
 import { HttpError } from './http';
 import { DAY_MS, retentionPolicy } from '../shared/retention';
-import { activeExpiryDates, retentionRoot } from './retention-store';
+import { activeRetentionCtes } from './retention-store';
 
 type EntryRow = FileRow & {
   entry_id: string;
@@ -21,6 +21,9 @@ type EntryRow = FileRow & {
   entry_actor: string | null;
   entry_pending: number;
   entry_date: number;
+  entry_first_expiry: number | null;
+  entry_last_expiry: number | null;
+  entry_permanent_count: number;
 };
 
 export function queryExplorer(sql: SqlStorage, env: Env, cursor: string | null, limit = 30,
@@ -32,6 +35,7 @@ export function queryExplorer(sql: SqlStorage, env: Env, cursor: string | null, 
   const filters = normalize(input);
   const key = JSON.stringify([scope.folder, filters.q, filters.type, filters.author, sort]);
   const { where, params, prefix } = scopedWhere(view, scope);
+  const policy = retentionPolicy(env);
   const matches: string[] = [];
   const matchParams: string[] = [];
   if (filters.q) {
@@ -46,8 +50,10 @@ export function queryExplorer(sql: SqlStorage, env: Env, cursor: string | null, 
 
   // Group every visible descendant before paging. A folder is one item even when
   // its files span many pages. Filters select folders without changing their totals.
-  const cte = `WITH scoped AS (
-    SELECT *, substr(path, length(?) + 1) AS relative_path FROM files WHERE ${where}
+  const source = view === 'files' ? 'retained_files' : 'files';
+  const expiry = view === 'files' ? 'expiry_at' : policy.trashDays ? `trashed_at + ${policy.trashDays * DAY_MS}` : 'NULL';
+  const cte = `WITH ${view === 'files' ? `${activeRetentionCtes(policy.fileDays)},` : ''} scoped AS (
+    SELECT *, substr(path, length(?) + 1) AS relative_path FROM ${source} WHERE ${where}
   ), named AS (
     SELECT *, CASE WHEN instr(relative_path, '/') > 0 THEN 0 ELSE 1 END AS folder_rank,
       CASE WHEN instr(relative_path, '/') > 0
@@ -65,6 +71,8 @@ export function queryExplorer(sql: SqlStorage, env: Env, cursor: string | null, 
       CASE WHEN COUNT(DISTINCT source) > 1 THEN 'web' ELSE MAX(source) END AS entry_source,
       MAX(trashed_at) AS entry_trashed, MIN(trashed_at) AS entry_first_trashed,
       MAX(delete_started_at IS NOT NULL) AS entry_pending,
+      MIN(${expiry}) AS entry_first_expiry, MAX(${expiry}) AS entry_last_expiry,
+      ${view === 'files' ? 'SUM(permanent)' : '0'} AS entry_permanent_count,
       CASE WHEN COUNT(DISTINCT trashed_by_id) > 1 THEN 'Multiple users' ELSE MAX(trashed_by_label) END AS entry_actor,
       MAX(${view === 'trash' ? 'trashed_at' : 'COALESCE(NULLIF(updated_at, 0), created_at)'}) AS entry_date, MAX(matches) AS matches
     FROM tagged GROUP BY entry_id
@@ -92,14 +100,10 @@ export function queryExplorer(sql: SqlStorage, env: Env, cursor: string | null, 
   const count = sql.exec<{ total: number }>(`${cte} SELECT COUNT(*) AS total FROM grouped WHERE matches = 1`, ...bindings).one();
   const page = rows.slice(0, limit);
   const last = page.at(-1);
-  const policy = retentionPolicy(env);
-  const activeDates = view === 'files' ? activeExpiryDates(sql, page.map(row => row.entry_path), policy.fileDays) : new Map<string, number>();
   return {
     entries: page.map(row => {
-      const firstAt = view === 'files' ? activeDates.get(retentionRoot(row.entry_path))
-        : policy.trashDays && row.entry_first_trashed !== null ? row.entry_first_trashed + policy.trashDays * DAY_MS : undefined;
-      const expiry = firstAt === undefined ? null : {
-        firstAt, lastAt: view === 'trash' ? row.entry_trashed! + policy.trashDays * DAY_MS : firstAt,
+      const expiry = row.entry_first_expiry === null ? null : {
+        firstAt: row.entry_first_expiry, lastAt: row.entry_last_expiry!,
       };
       return { ...(row.folder_rank === 1 ? present(row, env) : {
       kind: 'folder', id: row.entry_id, path: row.entry_path, name: row.entry_name,
@@ -107,7 +111,8 @@ export function queryExplorer(sql: SqlStorage, env: Env, cursor: string | null, 
       createdAt: row.entry_created, updatedAt: row.entry_updated, trashedAt: row.entry_trashed, trashedBy: row.entry_actor,
       deletionPending: !!row.entry_pending,
       downloadUrl: `${new URL(env.CONTENT_ORIGIN).origin}/folders.zip?path=${encodeURIComponent(row.entry_path)}`,
-      } satisfies SharedFolder), expiry };
+      } satisfies SharedFolder), expiry,
+      permanent: row.entry_permanent_count === row.file_count, permanentCount: row.entry_permanent_count };
     }),
     total: count?.total ?? 0,
     nextCursor: rows.length > limit && last

@@ -6,8 +6,9 @@ import { queryFileFilters, queryFiles } from './file-query';
 import { cleanPath, HttpError } from './http';
 import { initializeSchema } from './schema';
 import { UploadStore } from './upload-store';
-import { retentionPolicy } from '../shared/retention';
+import { retentionPolicy, type RetentionMode } from '../shared/retention';
 import { beginExpiredDeletion, moveExpiredToTrash } from './retention-store';
+import { removeDeletedRetention, setRetention } from './retention-settings';
 import { folderArchiveFiles } from './archive-store';
 
 // One object owns the metadata and live connections for one private shelf.
@@ -64,6 +65,12 @@ export class Shelf extends DurableObject<Env> {
   abortUpload(id: string): string | null { return this.uploads.abort(id); }
   releaseUpload(id: string): void { this.uploads.release(id); }
   async alarm(): Promise<void> { await this.uploads.cleanup(); }
+
+  setRetention(id: string, mode: RetentionMode) {
+    const result = setRetention(this.ctx.storage, id, mode, Date.now());
+    this.#broadcast();
+    return result;
+  }
 
   expireFiles(): number {
     const count = moveExpiredToTrash(this.ctx.storage, retentionPolicy(this.env).fileDays, Date.now());
@@ -146,6 +153,7 @@ export class Shelf extends DurableObject<Env> {
     this.ctx.storage.transactionSync(() => {
       this.ctx.storage.sql.exec('INSERT INTO deleted_files (id, object_key_hash) VALUES (?, ?) ON CONFLICT DO NOTHING', id, hash);
       this.ctx.storage.sql.exec("DELETE FROM files WHERE id = ? AND status = 'deleting'", id);
+      removeDeletedRetention(this.ctx.storage.sql, id);
     });
     this.#broadcast();
   }

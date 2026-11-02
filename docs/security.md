@@ -18,6 +18,8 @@ The deployment guide uses a 14-day browser session, a 15-minute MCP access token
 
 Use Access to change or revoke access. Do not rely on a policy edit to invalidate every token already issued at once. Existing tokens can remain valid until expiry or revocation. Keep the browser cookie HttpOnly and restrict OAuth return addresses to the clients used by the instance.
 
+Any approved team member can set a file or folder to expire in 30 days or make it permanent. The server sets the time and applies folder actions in one SQLite transaction. Browser origin checks protect the write endpoint. Permanence prevents automatic expiry from Files; it does not prevent an approved member from moving the item to Trash or deleting it from Trash.
+
 ## Uploaded HTML and SVG
 
 Uploaded content must use a different origin from the app. The content origin serves file bytes only. It exposes no file list, upload API, app assets, or MCP tools. The app origin does not serve uploaded HTML or SVG, including through image preview endpoints.

@@ -110,4 +110,19 @@ export function initializeSchema(storage: DurableObjectStorage): void {
       `);
     });
   }
+  if (version < 4) {
+    storage.transactionSync(() => {
+      sql.exec(`
+        CREATE TABLE retention_settings (
+          id TEXT PRIMARY KEY,
+          path TEXT NOT NULL,
+          kind TEXT NOT NULL CHECK (kind IN ('file', 'folder')),
+          mode TEXT NOT NULL CHECK (mode IN ('30-days', 'permanent')),
+          changed_at INTEGER NOT NULL
+        );
+        CREATE INDEX retention_settings_path ON retention_settings(kind, path);
+        INSERT INTO schema_migrations (version) VALUES (4);
+      `);
+    });
+  }
 }

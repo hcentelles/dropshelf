@@ -43,7 +43,11 @@ export interface SharedFolder extends Pick<SharedFile, 'id' | 'path' | 'name' | 
 export type ShelfEntry = SharedFile | SharedFolder;
 export function isFolder(entry: ShelfEntry): entry is SharedFolder { return 'kind' in entry && entry.kind === 'folder'; }
 export interface ExpiryWindow { firstAt: number; lastAt: number }
-export type ExplorerEntry = ShelfEntry & { expiry: ExpiryWindow | null };
+export type ExplorerEntry = ShelfEntry & {
+  expiry: ExpiryWindow | null;
+  permanent: boolean;
+  permanentCount: number;
+};
 export interface ExplorerPage { entries: ExplorerEntry[]; nextCursor: string | null; total: number }
 export interface FileScope { uploadId?: string; folder?: string }
 export interface ReplaceFile { id: string; version: number }

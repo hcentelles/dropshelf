@@ -119,6 +119,8 @@ tr.is-new { background: var(--success-bg); }
 .file-title a, .file-title .file-name { font-weight: 550; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
 .new-badge { flex-shrink: 0; font-size: 11px; font-weight: 550; border-radius: 10px; padding: 1px 8px; color: var(--success); background: var(--success-bg); }
+.permanent-badge { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; white-space: nowrap; font-size: 10px; font-weight: 550; border-radius: 10px; padding: 2px 7px; color: var(--accent); background: var(--accent-bg); }
+.permanent-badge .ph { font-size: 14px; }
 .person { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .person-label { font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .trash-actor { display: block; }

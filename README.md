@@ -18,6 +18,7 @@ A private file shelf for teams. Drop files or folders, then copy links that open
 - Download a complete folder as a ZIP file, including files in its subfolders.
 - Move files to Trash, restore their original links, and delete files permanently from Trash.
 - Move old files and folders to Trash automatically, then delete them after a separate Trash period. Configure both periods for each instance.
+- Set a file or whole folder to expire in 30 days from now, or make it permanent. Identify permanent items in the list.
 - Use email codes to sign in with Cloudflare Access.
 - Give agents the same file service through a remote MCP server.
 - Run separate instances from one codebase.
@@ -157,13 +158,22 @@ The default settings move files to Trash after **30 days**, then delete them per
 In Files, point to or focus the date to see the remaining time and exact expiry date. In Trash, the **Deletes in** column stays visible. On a phone, this value appears below the file name. A Trash folder with different deletion dates shows a range. The values update each minute while the page is visible.
 
 - A file at the root uses its last completed upload, replacement, or restore date. Opening, downloading, or previewing a file does not extend its life.
-- A top-level folder is one expiry group. Its date is the latest upload, replacement, or restore among its active files, including nested folders and files from other upload groups. The whole group moves to Trash together. A pending upload blocks expiry for that group. This keeps HTML pages and their assets together.
+- By default, a top-level folder is one expiry group. Its date is the latest upload, replacement, or restore among its active files, including nested folders and files from other upload groups. The whole group moves to Trash together unless an item has its own expiry setting. A pending upload blocks expiry for that group. This keeps HTML pages and their assets together.
 - The Trash period starts at the actual move to Trash, including a manual move. An old file still gets the full Trash period. Files in Trash are then deleted by their own Trash dates.
 - Restore starts a full new active period. Upload dates and links stay unchanged. Repeated restore calls for an already active file do not extend the period.
 
+Open an item's **More options** menu to change its expiry:
+
+- **Keep 30 days** sets the expiry to 30 days from the current server time. It replaces the previous deadline, including a permanent setting. It also works when the default period differs from 30 days or is off.
+- **Make permanent** prevents automatic expiry. The list shows a **Permanent** mark. A folder with both timed and permanent files shows **Some permanent**.
+
+A folder action includes every active file below that folder, across upload groups, subfolders, filters, and pages. It replaces existing settings below the folder and applies to future uploads. A later action on one file or subfolder can create an exception. A later upload, replacement, or restore starts a new 30-day period for the affected timed item or folder. Reads do not extend expiry. Expiry actions keep upload dates, file versions, and URLs unchanged.
+
+Permanent items can still be moved to Trash manually. The normal Trash deletion period then applies. Restoring them preserves their permanent setting. Folder settings are removed when the folder's last file is permanently deleted.
+
 Set the `FILE_RETENTION_DAYS` and `TRASH_RETENTION_DAYS` environment variables on the Workers. The deployment script maps `fileRetentionDays` and `trashRetentionDays` to these variables. Use whole days from `1` to `36500`, or `0` to disable a step. Missing Worker variables disable that step for older deployments. Invalid values stop the job before it changes data.
 
-Configuration changes apply to existing files and Trash. Reducing a period can make existing items due at the next check. The job deletes at most 100 files per run; a larger backlog can take more than one run. Failed deletions stay pending and retry on the next run. Deletions that already started also retry if automatic deletion is later disabled.
+Configuration changes apply to existing files that use the default and to Trash. Reducing a period can make existing items due at the next check. Explicit 30-day and permanent settings take priority over the active-file default. The job deletes at most 100 files per run; a larger backlog can take more than one run. Failed deletions stay pending and retry on the next run. Deletions that already started also retry if automatic deletion is later disabled.
 
 ## Live updates
 

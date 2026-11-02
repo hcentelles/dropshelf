@@ -143,6 +143,8 @@ For an existing Durable Object instance, the folder merge update preserves file 
 
 Schema version 3 adds the restore date used for expiry. Existing upload and Trash dates stay unchanged. Before enabling expiry, review both periods: they apply to existing files and Trash. Generate the instance configuration again to add the retention variables and hourly schedule. Missing retention variables disable the corresponding step; invalid values stop the job. Changing a period does not reset file dates.
 
+Schema version 4 adds file and folder expiry settings. Existing files continue to use their current default until a team member selects **Keep 30 days** or **Make permanent**. Folder settings cover all descendants and future uploads. No new Worker variables or storage bindings are required. Deploy the app Worker first, then the content Worker.
+
 The earlier move from D1 to Durable Objects did not copy D1 records or remove old resources. An instance still using D1 needs a separate migration for any data it must keep.
 
 Check file name search, type and author filters, and selection across pages. Check that **Delete all** shows the full Trash count when filters hide files. Do not confirm this action against files you need.

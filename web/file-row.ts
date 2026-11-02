@@ -3,6 +3,7 @@ import { isFolder, type ExplorerEntry, type ShelfEntry } from '../shared/types';
 import { copy, icon, identityLabel, initials } from './api';
 import { entryUrl } from './navigation';
 import { expiryDisplay, refreshExpiryDisplay } from './expiry';
+import type { RetentionMode } from '../shared/retention';
 
 function text(tag: string, value: string, className = ''): HTMLElement {
   const node = document.createElement(tag);
@@ -25,6 +26,7 @@ interface FileActions {
   trash?: (file: ShelfEntry) => Promise<void>;
   restore?: (file: ShelfEntry) => Promise<void>;
   deletePermanently?: (file: ShelfEntry) => void;
+  setRetention?: (file: ShelfEntry, mode: RetentionMode) => Promise<void>;
 }
 
 export function fileRow(file: ExplorerEntry, fresh: boolean, callbacks: FileActions): HTMLTableRowElement {
@@ -58,6 +60,11 @@ export function fileRow(file: ExplorerEntry, fresh: boolean, callbacks: FileActi
     title.append(pending);
   }
   if (fresh) title.append(text('span', !folder && file.version > 1 ? 'Updated' : 'New', 'new-badge'));
+  if (!inTrash && file.permanentCount) {
+    const badge = text('span', '', 'permanent-badge');
+    badge.append(icon('infinity'), document.createTextNode(file.permanent ? 'Permanent' : 'Some permanent'));
+    title.append(badge);
+  }
   const type = folder ? `${file.fileCount} ${file.fileCount === 1 ? 'file' : 'files'}`
     : file.contentType === 'text/html' ? 'HTML' : (file.name.split('.').at(-1) ?? 'Image').toUpperCase();
   const dateValue = file.trashedAt ?? file.updatedAt;
@@ -162,6 +169,19 @@ export function fileRow(file: ExplorerEntry, fresh: boolean, callbacks: FileActi
     download.prepend(icon('download-simple'));
     download.addEventListener('click', () => { menu.open = false; });
     panel.append(download);
+    if (callbacks.setRetention) {
+      for (const [mode, label, symbol] of [
+        ['30-days', 'Keep 30 days', 'calendar-plus'], ['permanent', 'Make permanent', 'infinity'],
+      ] as const) {
+        const button = document.createElement('button');
+        button.append(icon(symbol), text('span', label));
+        button.addEventListener('click', () => {
+          menu.open = false;
+          void run(entry => callbacks.setRetention!(entry, mode));
+        });
+        panel.append(button);
+      }
+    }
   }
   panel.append(remove);
   menu.append(summary, panel);

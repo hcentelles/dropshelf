@@ -15,6 +15,7 @@ import { initTrashView } from './trash';
 import { droppedFiles, selectedFiles, uploadFiles, type LocalFile } from './uploads';
 import { initExpiryUpdates } from './expiry';
 import { initConfiguration } from './configuration';
+import type { RetentionMode } from '../shared/retention';
 
 let config: AppConfig | undefined;
 let uploading = false;
@@ -28,7 +29,7 @@ const selectFiles = element<HTMLButtonElement>('select-files');
 const selectFolder = element<HTMLButtonElement>('select-folder');
 const activeFiles = createFileList({
   prefix: '', view: 'files', canAutoLoad: () => !uploading,
-  render: file => fileRow(file, fresh.has(file.id), { trash: moveToTrash }),
+  render: file => fileRow(file, fresh.has(file.id), { trash: moveToTrash, setRetention }),
   onState: state => { managing = state.busy; setUploadEnabled(!!config && !uploading && !managing); },
 });
 const trash = initTrashView(() => {
@@ -64,6 +65,19 @@ function updateRecentCopy(): void {
 
 async function moveToTrash(file: ShelfEntry): Promise<void> {
   await trashEntries([file]);
+}
+
+async function setRetention(file: ShelfEntry, mode: RetentionMode): Promise<void> {
+  activeFiles.setBusy(true, 'Updating expiry…');
+  try {
+    await api('/api/files/retention', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: file.id, mode }),
+    });
+    activeFiles.invalidate();
+    await activeFiles.refresh();
+    toast(mode === 'permanent' ? 'Marked permanent.' : 'Expiry set to 30 days from now.');
+  } catch (error) { toast(error instanceof Error ? error.message : 'Expiry could not be changed. Try again.'); }
+  finally { activeFiles.setBusy(false); }
 }
 
 async function startUpload(files: LocalFile[], folder = currentScope().folder): Promise<void> {

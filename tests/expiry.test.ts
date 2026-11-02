@@ -28,3 +28,15 @@ it('distinguishes a disabled policy from deletion that already started', () => {
   expect(expiryText({ ...trash, expiry: null, deletionPending: true }, now)).toMatchObject({ short: 'Pending', urgent: true });
   expect(expiryText({ ...trash, kind: 'folder', expiry: windowAt(DAY_MS), deletionPending: true }, now).short).toBe('In progress');
 });
+
+it('distinguishes permanent items from a disabled default and explains mixed folder expiry', () => {
+  expect(expiryText({ ...active, expiry: null, permanent: true, permanentCount: 1 }, now)).toMatchObject({
+    short: 'Permanent', summary: 'Never expires', urgent: false,
+  });
+  const mixed = expiryText({ ...active, kind: 'folder', expiry: windowAt(30 * DAY_MS), permanent: false, permanentCount: 2 }, now);
+  expect(mixed.summary).toBe('Timed files move to Trash in 30 days');
+  expect(mixed.detail).toContain('Permanent files do not expire.');
+  const ranged = expiryText({ ...active, kind: 'folder', expiry: windowAt(DAY_MS, 30 * DAY_MS) }, now);
+  expect(ranged.detail).toContain('Expiry dates:');
+  expect(ranged.detail).not.toContain('whole top-level folder');
+});
