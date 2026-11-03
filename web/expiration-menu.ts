@@ -33,8 +33,9 @@ export function expirationMenu(file: ExplorerEntry, menu: HTMLDetailsElement, ma
   const status = expiryDisplay(file, 'menu');
   submenu.append(back, status);
   for (const [mode, label, symbol] of [
-    ['30-days', 'Extend 30 days', 'calendar-plus'], ['permanent', 'Make permanent', 'infinity'],
+    ['30-days', 'Expire in 30 days', 'calendar-plus'], ['permanent', 'Make permanent', 'infinity'],
   ] as const) {
+    if (mode === 'permanent' && file.permanent) continue;
     const action = button(label, symbol);
     action.addEventListener('click', () => { menu.open = false; onSelect(mode); });
     submenu.append(action);

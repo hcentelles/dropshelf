@@ -5,7 +5,7 @@ import { cleanPath, HttpError } from './http';
 // so they cover every upload group and files added after the action.
 export function setRetention(storage: DurableObjectStorage, id: string, mode: RetentionMode, now: number) {
   if (typeof id !== 'string' || !['30-days', 'permanent'].includes(mode)) {
-    throw new HttpError(400, 'Choose Extend 30 days or Make permanent.');
+    throw new HttpError(400, 'Choose Expire in 30 days or Make permanent.');
   }
   const folder = id.startsWith('folder:');
   if (!folder && !/^[0-9a-f-]{36}$/.test(id)) throw new HttpError(400, 'The item ID is not valid.');
