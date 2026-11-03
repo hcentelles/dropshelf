@@ -219,12 +219,25 @@ test('keeps folder navigation and Trash expiry usable at phone width', async ({ 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
 
-test('changes file expiry from short menu actions and updates another open page', async ({ page, app, shelf, seed }) => {
+test('shows current expiry in a submenu and updates another open page after changes', async ({ page, app, shelf, seed }) => {
   const second = await page.context().newPage();
   await Promise.all([page.goto(app.appOrigin), second.goto(app.appOrigin)]);
   const file = row(page, seed.alpha.name);
+  const expiration = file.getByRole('button', { name: 'Expiration', exact: true });
+  const submenu = file.getByRole('group', { name: 'Expiration', exact: true });
   await file.getByLabel(`More options for ${seed.alpha.name}`).click();
-  await expect(file.getByRole('button', { name: 'Keep 30 days', exact: true })).toBeVisible();
+  await expect(file.getByRole('button', { name: 'Extend 30 days', exact: true })).toBeHidden();
+  await expect(file.getByRole('button', { name: 'Make permanent', exact: true })).toBeHidden();
+  await expiration.press('ArrowRight');
+  await expect(submenu.locator('.expiry-summary')).toHaveText('30 days left');
+  await expect(file.getByRole('button', { name: 'Back to file options' })).toBeFocused();
+  await file.getByRole('button', { name: 'Back to file options' }).press('Escape');
+  await expect(expiration).toBeFocused();
+  await expect(file.getByRole('button', { name: 'Move to Trash', exact: true })).toBeVisible();
+  await expiration.press('Enter');
+  await file.getByRole('button', { name: 'Back to file options' }).press('ArrowLeft');
+  await expect(expiration).toBeFocused();
+  await expiration.click();
   await file.getByRole('button', { name: 'Make permanent', exact: true }).click();
   await expect(file.locator('.permanent-badge')).toHaveText('Permanent');
   await expect(row(second, seed.alpha.name).locator('.permanent-badge')).toHaveText('Permanent');
@@ -235,7 +248,12 @@ test('changes file expiry from short menu actions and updates another open page'
   await expect(file.locator('.permanent-badge')).toBeVisible();
   const before = Date.now();
   await file.getByLabel(`More options for ${seed.alpha.name}`).click();
-  await file.getByRole('button', { name: 'Keep 30 days', exact: true }).click();
+  await expiration.click();
+  await expect(submenu.locator('.expiry-summary')).toHaveText('Never expires');
+  await file.getByRole('button', { name: 'Back to file options' }).click();
+  await expect(expiration).toBeFocused();
+  await expiration.click();
+  await file.getByRole('button', { name: 'Extend 30 days', exact: true }).click();
   await expect(file.locator('.permanent-badge')).toHaveCount(0);
   await expect(row(second, seed.alpha.name).locator('.permanent-badge')).toHaveCount(0);
   const response = await shelf.http.get('/api/explorer');
@@ -243,6 +261,16 @@ test('changes file expiry from short menu actions and updates another open page'
   expect(entry.expiry!.firstAt).toBeGreaterThanOrEqual(before + 30 * DAY_MS);
   expect(entry.expiry!.lastAt).toBeLessThanOrEqual(Date.now() + 30 * DAY_MS);
   expect(await (await shelf.http.get(`/api/files/${seed.alpha.id}`)).json()).toEqual(seed.alpha);
+  await file.getByLabel(`More options for ${seed.alpha.name}`).click();
+  await expiration.click();
+  await expect(submenu.locator('.expiry-summary')).toHaveText('30 days left');
+  await page.getByRole('heading', { name: 'All files', exact: true }).click();
+  await expect(submenu).toBeHidden();
+  await file.getByLabel(`More options for ${seed.alpha.name}`).click();
+  await expect(expiration).toBeVisible();
+  await expect(submenu).toBeHidden();
+  await expiration.press('Escape');
+  await expect(file.getByLabel(`More options for ${seed.alpha.name}`)).toBeFocused();
   await second.close();
 });
 
@@ -254,6 +282,9 @@ test('applies folder expiry to hidden descendants and future uploads', async ({ 
   await page.locator('#search').fill('index');
   await expect(page.locator('#file-list > tr')).toHaveCount(1);
   await row(page, 'site').getByLabel('More options for site').click();
+  await row(page, 'site').getByRole('button', { name: 'Expiration', exact: true }).click();
+  await expect(row(page, 'site').locator('.expiry-menu .expiry-summary')).toHaveText('30 days left');
+  await expect(row(page, 'site').locator('.expiry-menu .expiry-detail')).toHaveText('Some files are permanent');
   await row(page, 'site').getByRole('button', { name: 'Make permanent', exact: true }).click();
   await expect(row(page, 'site').locator('.permanent-badge')).toHaveText('Permanent');
   await page.locator('#clear-filters').click();
@@ -264,7 +295,9 @@ test('applies folder expiry to hidden descendants and future uploads', async ({ 
   await expect(row(page, later.name).locator('.permanent-badge')).toHaveText('Permanent');
   await page.getByRole('navigation', { name: 'Folder path' }).getByRole('link', { name: 'All files' }).click();
   await row(page, 'site').getByLabel('More options for site').click();
-  await row(page, 'site').getByRole('button', { name: 'Keep 30 days', exact: true }).click();
+  await row(page, 'site').getByRole('button', { name: 'Expiration', exact: true }).click();
+  await expect(row(page, 'site').locator('.expiry-menu .expiry-summary')).toHaveText('Never expires');
+  await row(page, 'site').getByRole('button', { name: 'Extend 30 days', exact: true }).click();
   await expect(row(page, 'site').locator('.permanent-badge')).toHaveCount(0);
   await row(page, 'site').getByRole('link', { name: 'site', exact: true }).click();
   await expect(row(page, 'index.html')).toBeVisible();
@@ -280,7 +313,10 @@ test('shows permanent marks and single-line menu actions at phone width', async 
   for (const name of [seed.alpha.name, 'site']) {
     const item = row(page, name);
     await item.getByLabel(`More options for ${name}`).click();
-    for (const label of ['Keep 30 days', 'Make permanent']) {
+    await item.getByRole('button', { name: 'Expiration', exact: true }).click();
+    await expect(item.locator('.expiry-menu .expiry-summary')).toHaveText('30 days left');
+    await expect(item.getByRole('group', { name: 'Expiration', exact: true })).toBeInViewport();
+    for (const label of ['Extend 30 days', 'Make permanent']) {
       const action = item.getByRole('button', { name: label, exact: true });
       await expect(action).toBeVisible();
       expect(await action.locator('span').evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(24);

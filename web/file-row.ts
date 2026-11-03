@@ -3,6 +3,7 @@ import { isFolder, type ExplorerEntry, type ShelfEntry } from '../shared/types';
 import { copy, icon, identityLabel, initials } from './api';
 import { entryUrl } from './navigation';
 import { expiryDisplay, refreshExpiryDisplay } from './expiry';
+import { expirationMenu } from './expiration-menu';
 import type { RetentionMode } from '../shared/retention';
 
 function text(tag: string, value: string, className = ''): HTMLElement {
@@ -150,7 +151,9 @@ export function fileRow(file: ExplorerEntry, fresh: boolean, callbacks: FileActi
   summary.className = 'icon-button';
   summary.setAttribute('aria-label', `More options for ${file.name}`);
   summary.append(icon('dots-three'));
-  const panel = text('div', '', 'menu-panel');
+  const container = text('div', '', 'menu-panel');
+  const panel = text('div', '', 'menu-view');
+  container.append(panel);
   const remove = document.createElement('button');
   remove.className = 'menu-danger';
   remove.append(icon('trash'), text('span', inTrash ? file.deletionPending ? 'Retry permanent delete' : 'Delete permanently' : 'Move to Trash'));
@@ -170,28 +173,20 @@ export function fileRow(file: ExplorerEntry, fresh: boolean, callbacks: FileActi
     download.addEventListener('click', () => { menu.open = false; });
     panel.append(download);
     if (callbacks.setRetention) {
-      for (const [mode, label, symbol] of [
-        ['30-days', 'Keep 30 days', 'calendar-plus'], ['permanent', 'Make permanent', 'infinity'],
-      ] as const) {
-        const button = document.createElement('button');
-        button.append(icon(symbol), text('span', label));
-        button.addEventListener('click', () => {
-          menu.open = false;
-          void run(entry => callbacks.setRetention!(entry, mode));
-        });
-        panel.append(button);
-      }
+      container.append(expirationMenu(file, menu, panel, mode => {
+        void run(entry => callbacks.setRetention!(entry, mode));
+      }));
     }
   }
   panel.append(remove);
-  menu.append(summary, panel);
+  menu.append(summary, container);
   controls.append(copyButton, menu);
   actions.append(controls);
   row.append(nameCell, uploader, linkCell, date);
   if (inTrash) {
     const expiryCell = document.createElement('td');
     expiryCell.className = 'col-expiry';
-    expiryCell.append(expiryDisplay(file, true));
+    expiryCell.append(expiryDisplay(file, 'compact'));
     row.append(expiryCell);
   }
   row.append(actions);

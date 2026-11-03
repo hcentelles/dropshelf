@@ -162,9 +162,9 @@ In Files, point to or focus the date to see the remaining time and exact expiry 
 - The Trash period starts at the actual move to Trash, including a manual move. An old file still gets the full Trash period. Files in Trash are then deleted by their own Trash dates.
 - Restore starts a full new active period. Upload dates and links stay unchanged. Repeated restore calls for an already active file do not extend the period.
 
-Open an item's **More options** menu to change its expiry:
+Open an item's **More options → Expiration** submenu to see the current time remaining and change its expiry:
 
-- **Keep 30 days** sets the expiry to 30 days from the current server time. It replaces the previous deadline, including a permanent setting. It also works when the default period differs from 30 days or is off.
+- **Extend 30 days** sets the expiry to 30 days from the current server time. It replaces the previous deadline, including a permanent setting. It also works when the default period differs from 30 days or is off.
 - **Make permanent** prevents automatic expiry. The list shows a **Permanent** mark. A folder with both timed and permanent files shows **Some permanent**.
 
 A folder action includes every active file below that folder, across upload groups, subfolders, filters, and pages. It replaces existing settings below the folder and applies to future uploads. A later action on one file or subfolder can create an exception. A later upload, replacement, or restore starts a new 30-day period for the affected timed item or folder. Reads do not extend expiry. Expiry actions keep upload dates, file versions, and URLs unchanged.

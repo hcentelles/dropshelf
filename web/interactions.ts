@@ -7,7 +7,7 @@ function openMenus(): HTMLDetailsElement[] {
   return [...document.querySelectorAll<HTMLDetailsElement>('.account-menu[open], .file-menu[open]')];
 }
 
-function placeMenu(menu: HTMLDetailsElement): void {
+export function placeMenu(menu: HTMLDetailsElement): void {
   const panel = menu.querySelector<HTMLElement>('.menu-panel');
   const trigger = menu.querySelector('summary');
   if (!panel || !trigger) return;
