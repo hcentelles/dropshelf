@@ -1,0 +1,6 @@
+{
+  "message": "JSON upload check",
+  "unicode": "Check mark: ✓",
+  "items": [1, true, null],
+  "nested": { "ready": true }
+}

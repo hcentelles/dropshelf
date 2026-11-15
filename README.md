@@ -5,7 +5,7 @@ A private file shelf for teams. Drop files or folders, then copy links that open
 ## Features
 
 - Drop files and folders, or select them from your computer.
-- Configure allowed file types through a Worker variable. The default includes HTML, images, Markdown, CSV, PDF, CSS, JavaScript, and ZIP. Skip unsupported files and report the result.
+- Configure allowed file types through a Worker variable. The default includes HTML, images, Markdown, CSV, JSON, PDF, CSS, JavaScript, and ZIP. Skip unsupported files and report the result.
 - Browse folders at each level, with parent links and browser history. Folder actions include all files below that folder.
 - Keep folder paths so relative images, CSS, and JavaScript work.
 - Keep open pages current through a live connection. Uploads, Trash changes, restores, and deletions appear without a page refresh.
@@ -90,12 +90,14 @@ Runtime settings are Cloudflare Worker environment variables or secrets, read th
 Set the `ALLOWED_FILE_TYPES` Worker variable to a comma-separated list of extensions or MIME types:
 
 ```text
-image/*,.html,.htm,.md,.markdown,.csv,.pdf,.css,.js,.zip
+image/*,.html,.htm,.md,.markdown,.csv,.json,.pdf,.css,.js,.zip
 ```
 
 The browser picker, folder filter, server checks, and MCP tools use this setting. For deployment, set `allowedFileTypes` in your private instance file, generate the configuration again, and redeploy. A dashboard variable change must also be saved in that private file so a later deployment does not replace it.
 
 PDF links open in the browser PDF viewer. Markdown and CSV links open as UTF-8 text in the browser. Download links keep the original bytes, name, and media type. Existing file links stay valid when you change the upload allowlist.
+
+JSON files use `application/json` for browser links and downloads. The service stores the original bytes without parsing or formatting the JSON. Add `.json` to an existing instance's `allowedFileTypes` setting and redeploy to enable uploads. File size limits and Access checks apply to JSON files too.
 
 ZIP uploads keep their original bytes. The server does not extract them. ZIP links download the file.
 

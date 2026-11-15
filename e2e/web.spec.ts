@@ -36,6 +36,42 @@ test('uploads a file, copies its link, and opens the exact contents', async ({ p
   expect(new URL(content.url()).origin).toBe(app.contentOrigin);
 });
 
+test('uploads JSON, lists its type, opens it, and downloads the original bytes', async ({ page, app, shelf }) => {
+  await page.goto(app.appOrigin);
+  await expect(page.locator('#supported-types')).toContainText('JSON');
+  await expect(page.locator('#file-input')).toHaveAttribute('accept', /\.json(?:,|$)/);
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Upload files', exact: true }).click();
+  await (await chooser).setFiles(fixturePath('data.json'));
+  const item = row(page, 'data.json');
+  await expect(item).toBeVisible();
+  await expect(page.locator('#notice-text')).toHaveText('1 file added.');
+  const bytes = await fixtureBytes('data.json');
+  const [file] = await shelf.files();
+  expect(file).toMatchObject({ name: 'data.json', source: 'web', contentType: 'application/json', size: bytes.length });
+  await page.reload();
+  await page.locator('#filter-type').selectOption('application/json');
+  await expect(page.locator('#filter-type option:checked')).toHaveText('JSON (1)');
+  await expect(item).toBeVisible();
+  const popup = page.waitForEvent('popup');
+  await item.getByRole('link', { name: 'data.json', exact: true }).click();
+  const content = await popup;
+  await expect(content).toHaveURL(file!.url);
+  await expect(content.locator('body')).toContainText('JSON upload check');
+  expect(new URL(content.url()).origin).toBe(app.contentOrigin);
+  await item.getByLabel('More options for data.json').click();
+  const downloaded = page.waitForEvent('download');
+  await item.getByRole('link', { name: 'Download file', exact: true }).click();
+  const download = await downloaded;
+  expect(download.suggestedFilename()).toBe('data.json');
+  expect(await downloadBytes(download)).toEqual(bytes);
+  await page.locator('#file-input').setInputFiles({
+    name: 'too-large.json', mimeType: 'application/json', buffer: Buffer.alloc(app.config.maxFileBytes + 1, 32),
+  });
+  await expect(page.locator('#notice-text')).toContainText('File is too large.');
+  expect(await shelf.files()).toHaveLength(1);
+});
+
 test('asks before replacement and keeps the original link', async ({ page, app, shelf, seed }) => {
   await page.goto(app.appOrigin);
   const incoming = { name: seed.alpha.name, mimeType: 'text/markdown', buffer: await fixtureBytes('replacement.md') };

@@ -101,10 +101,44 @@ describe('private file service', () => {
     }
   });
 
+  it('stores JSON with its canonical MIME type and preserves bytes for GET, HEAD, and download', async () => {
+    const id = await group();
+    const body = '{\n  "message": "JSON check ✓",\n  "items": [1, true, null]\n}\n';
+    const size = new TextEncoder().encode(body).byteLength;
+    for (const [path, declaredType] of [
+      ['json-files/data.json', 'application/json; charset=utf-8'],
+      ['json-files/unknown.JSON', 'application/octet-stream'],
+      ['json-files/mislabeled.json', 'text/html'],
+    ]) {
+      const uploaded = await put(id, path!, body, declaredType);
+      expect(uploaded.status).toBe(201);
+      const file = await uploaded.json() as SharedFile;
+      expect(file).toMatchObject({ path, contentType: 'application/json', size });
+      const record = await fetchApp(`/api/files/${file.id}`);
+      expect(await record.json()).toEqual(file);
+      for (const [url, disposition] of [[file.url, 'inline'], [file.downloadUrl, 'attachment']]) {
+        const response = await exports.default.fetch(url!);
+        expect(response.status).toBe(200);
+        expect(response.headers.get('Content-Type')).toBe('application/json');
+        expect(response.headers.get('Content-Length')).toBe(String(size));
+        expect(response.headers.get('Content-Disposition')).toContain(disposition);
+        expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+        expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+        expect(await response.text()).toBe(body);
+      }
+      const head = await exports.default.fetch(file.url, { method: 'HEAD' });
+      expect(head.status).toBe(200);
+      expect(head.headers.get('Content-Type')).toBe('application/json');
+      expect(head.headers.get('Content-Length')).toBe(String(size));
+      expect(await head.text()).toBe('');
+      expect((await fetchApp(new URL(file.url).pathname)).status).toBe(404);
+    }
+  });
+
   it('enforces the configured file types on the server even when a client spoofs the MIME type', async () => {
     const id = await createUpload(env, user);
     const imagesOnly = { ...env, ALLOWED_FILE_TYPES: 'image/*' };
-    for (const path of ['not-an-image.html', 'notes.md', 'scores.csv']) {
+    for (const path of ['not-an-image.html', 'notes.md', 'scores.csv', 'data.json']) {
       await expect(uploadFile(imagesOnly, user, {
         uploadId: id, path, type: 'image/png', size: 0, body: new Uint8Array(), source: 'web',
       })).rejects.toMatchObject({ status: 415 });
@@ -115,6 +149,12 @@ describe('private file service', () => {
       body: new Uint8Array(), source: 'web',
     });
     expect(file.contentType).toBe('text/markdown');
+    const jsonOnly = { ...env, ALLOWED_FILE_TYPES: 'application/json' };
+    const json = await uploadFile(jsonOnly, user, {
+      uploadId: id, path: 'allowed.json', type: 'application/octet-stream', size: 2,
+      body: new TextEncoder().encode('{}'), source: 'web',
+    });
+    expect(json.contentType).toBe('application/json');
   });
 
   it('rejects unsupported files and traversal paths', async () => {
@@ -141,10 +181,10 @@ describe('private file service', () => {
     })).rejects.toMatchObject({ status: 403 });
   });
 
-  it('rejects oversized files before it reserves a path', async () => {
+  it.each(['large.png', 'large.json'])('rejects oversized %s before it reserves a path', async path => {
     const id = await createUpload(env, user);
     await expect(uploadFile(env, user, {
-      uploadId: id, path: 'large.png', type: 'image/png', size: Number(env.MAX_FILE_BYTES) + 1,
+      uploadId: id, path, type: 'application/octet-stream', size: Number(env.MAX_FILE_BYTES) + 1,
       body: new Uint8Array(), source: 'web',
     })).rejects.toMatchObject({ status: 413 });
     expect(await database(sql => sql.exec('SELECT id FROM files WHERE upload_id = ?', id).toArray()[0] ?? null)).toBeNull();

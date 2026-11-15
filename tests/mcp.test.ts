@@ -34,6 +34,17 @@ it('supports MCP initialization, tool discovery, and an upload with the server i
   expect(await html.text()).toBe('<h1>From an agent</h1>');
 });
 
+it('rejects oversized JSON MCP requests before storing a file', async () => {
+  const uploaded = await rpc('tools/call', { name: 'upload_file', arguments: {
+    path: 'over-inline-limit.json', contentType: 'application/json',
+    content: JSON.stringify('A'.repeat(5 * 1024 * 1024)),
+  } });
+  expect(uploaded.response.status).toBe(413);
+  expect(uploaded.result.error.message).toContain('Payload Too Large');
+  const listed = await rpc('tools/call', { name: 'list_files', arguments: { q: 'over-inline-limit.json' } });
+  expect(JSON.parse(listed.result.result.content[0].text).files).toEqual([]);
+});
+
 it('supports Trash, restore, and confirmed permanent deletion through MCP', async () => {
   const tools = await rpc('tools/list');
   for (const name of ['trash_file', 'delete_file_permanently']) {

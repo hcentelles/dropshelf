@@ -46,6 +46,33 @@ test('uploads a folder and binary ZIP, then serves the original bytes over HTTP'
   expect((await shelf.files()).map(item => item.id).sort()).toEqual([...uploaded, archive].map(item => item.id).sort());
 });
 
+test('uploads JSON through MCP and retrieves its metadata and original bytes', async ({ mcp, shelf }) => {
+  const { tools } = await mcp.client.listTools();
+  expect(tools.find(tool => tool.name === 'upload_file')?.description).toContain('JSON');
+  const bytes = await fixtureBytes('data.json');
+  const uploaded: SharedFile[] = [];
+  for (const encoding of ['utf8', 'base64'] as const) {
+    const file = await mcp.call<SharedFile>('upload_file', {
+      path: `json/${encoding}.json`, content: bytes.toString(encoding), encoding,
+      ...(encoding === 'utf8' && { contentType: 'application/json' }),
+    });
+    expect(file).toMatchObject({ source: 'mcp', contentType: 'application/json', size: bytes.length });
+    expect(await mcp.call<SharedFile>('get_file', { id: file.id })).toEqual(file);
+    for (const [url, disposition] of [[file.url, 'inline'], [file.downloadUrl, 'attachment']]) {
+      const response = await shelf.http.get(url!);
+      expect(response.status()).toBe(200);
+      expect(response.headers()['content-type']).toBe('application/json');
+      expect(response.headers()['content-disposition']).toContain(disposition);
+      expect(await response.body()).toEqual(bytes);
+    }
+    uploaded.push(file);
+  }
+  const filters = await mcp.call<FileFilterOptions>('get_file_filters');
+  expect(filters.types).toContainEqual({ value: 'application/json', label: 'JSON', count: 2 });
+  const listed = await mcp.call<FilePage>('list_files', { type: 'application/json' });
+  expect(listed.files.map(file => file.id).sort()).toEqual(uploaded.map(file => file.id).sort());
+});
+
 test('requires the current file version for replacement and keeps the shared URL', async ({ mcp, shelf, seed }) => {
   const [checked] = await mcp.call<UploadCheck[]>('check_uploads', { paths: [seed.alpha.path] });
   expect(checked?.existing).toMatchObject({ id: seed.alpha.id, version: 1 });
@@ -112,6 +139,7 @@ test('rejects invalid uploads and cross-origin mutations without changing the sh
     { path: 'program.exe', content: 'unsupported' },
     { path: 'invalid.zip', content: '!not-base64!', encoding: 'base64' },
     { path: 'too-large.md', content: 'A'.repeat(app.config.maxFileBytes + 1) },
+    { path: 'too-large.json', content: JSON.stringify('A'.repeat(app.config.maxFileBytes)), contentType: 'application/json' },
   ]) {
     const result = await mcp.client.callTool({ name: 'upload_file', arguments: args });
     expect(result.isError, JSON.stringify(result)).toBe(true);

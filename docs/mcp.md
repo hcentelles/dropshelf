@@ -98,9 +98,11 @@ For a folder:
 1. Call `create_upload`.
 2. Pass the returned `uploadId` to every `upload_file` call.
 3. Use paths such as `report/index.html` and `report/images/chart.png`.
-4. Use `utf8` for HTML, SVG, Markdown, or CSV. Use `base64` for binary files.
+4. Use `utf8` for HTML, SVG, Markdown, CSV, or JSON. Use `base64` for binary files.
 
 The `ALLOWED_FILE_TYPES` Worker variable applies to MCP uploads too. The `upload_file` tool description reports the active setting.
+
+For JSON, use a `.json` path and pass the JSON text in `content`. You can set `contentType` to `application/json`; the server also detects it from the extension. The returned browser and download URLs serve the original bytes with that media type. Use `type: "application/json"` with `list_files` to find JSON files. The existing MCP request and file size limits still apply. For larger files, use the HTTP upload URL from `create_upload` within the configured HTTP upload limit.
 
 Folders merge by full path across upload groups. HTML can load relative assets added in later groups. Paths are case-sensitive. A file and a folder cannot use the same full path.
 
