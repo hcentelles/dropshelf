@@ -36,8 +36,10 @@ test('uploads a file, copies its link, and opens the exact contents', async ({ p
   expect(new URL(content.url()).origin).toBe(app.contentOrigin);
 });
 
-test('uploads JSON, lists its type, opens it, and downloads the original bytes', async ({ page, app, shelf }) => {
-  await page.goto(app.appOrigin);
+test('uploads JSON through the browser link from MCP and downloads the original bytes', async ({ page, app, shelf, mcp }) => {
+  const { browserUploadUrl } = await mcp.call<{ browserUploadUrl: string }>('create_upload');
+  expect(new URL(browserUploadUrl).origin).toBe(app.appOrigin);
+  await page.goto(browserUploadUrl);
   await expect(page.locator('#supported-types')).toContainText('JSON');
   await expect(page.locator('#file-input')).toHaveAttribute('accept', /\.json(?:,|$)/);
   const chooser = page.waitForEvent('filechooser');
@@ -59,9 +61,12 @@ test('uploads JSON, lists its type, opens it, and downloads the original bytes',
   await expect(content).toHaveURL(file!.url);
   await expect(content.locator('body')).toContainText('JSON upload check');
   expect(new URL(content.url()).origin).toBe(app.contentOrigin);
+  const { downloadUrl } = await mcp.call<{ downloadUrl: string }>('get_download_link', { id: file!.id });
   await item.getByLabel('More options for data.json').click();
+  const link = item.getByRole('link', { name: 'Download file', exact: true });
+  await expect(link).toHaveAttribute('href', downloadUrl);
   const downloaded = page.waitForEvent('download');
-  await item.getByRole('link', { name: 'Download file', exact: true }).click();
+  await link.click();
   const download = await downloaded;
   expect(download.suggestedFilename()).toBe('data.json');
   expect(await downloadBytes(download)).toEqual(bytes);

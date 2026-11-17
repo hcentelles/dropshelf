@@ -121,15 +121,19 @@ Available tools:
 | `list_files` | Search and filter files, and get the next page cursor |
 | `get_file_filters` | Get file types and authors for the selected view |
 | `get_file` | Get a file record and protected URLs |
-| `create_upload` | Start a group for files that share relative paths |
+| `get_download_link` | Get the protected attachment link and file details |
+| `create_upload` | Start a direct HTTP upload or open the browser upload page |
 | `check_uploads` | Check full paths and get current files before replacement approval |
-| `upload_file` | Upload an allowed text or binary file and return its URLs |
+| `upload_file_reference` | Copy the original bytes from a file reference that ChatGPT provides |
+| `upload_file` | Upload content sent inline in the tool call |
 | `trash_file` | Move a file to Trash and stop serving its links |
 | `restore_file` | Restore a file and its original links |
 | `delete_file_permanently` | Remove a file from Trash after explicit confirmation |
 | `trash_files`, `restore_files`, `delete_files_permanently` | Manage up to 10 selected file IDs per call |
 
-For a folder, call `create_upload`, then pass its `uploadId` and each relative path to `upload_file`. Folders with the same full path merge across upload groups. HTML can load images, CSS, and JavaScript added to that folder in later uploads.
+To transfer an existing file as-is, use `upload_file_reference` or send the bytes directly with `create_upload`. Use `get_download_link` for downloads. These paths keep file bytes out of MCP messages. See [file transfers](docs/mcp.md#transfer-files-as-is).
+
+For a folder, call `create_upload`. Use its upload ID and a relative path for each file. Folders with the same full path merge across upload groups. HTML can load images, CSS, and JavaScript added to that folder in later uploads.
 
 ## File replacement
 
@@ -137,7 +141,7 @@ The shelf has one shared folder tree. Uploading inside an open folder adds files
 
 Replacement keeps the file ID, browser URL, and download URL. It updates the contents, size, author, and update time. The old contents stay available until the new upload completes. If another user changes the file after approval, the app asks again. Replaced contents cannot be recovered from Trash.
 
-MCP clients must call `check_uploads`, ask for approval, and pass the returned file ID and version in `upload_file.replace`. See the [replacement instructions](docs/mcp.md#replace-an-existing-file).
+MCP clients must call `check_uploads`, ask for approval, and send the returned file ID and version with the chosen upload method. See the [replacement instructions](docs/mcp.md#replace-an-existing-file).
 
 The [MCP guide](docs/mcp.md) includes authentication, tool examples, larger uploads, and service identities.
 

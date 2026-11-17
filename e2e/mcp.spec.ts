@@ -6,8 +6,9 @@ test('connects with the MCP SDK, discovers tools, and returns the server identit
   expect(mcp.client.getServerVersion()?.name).toBe('dropshelf');
   const { tools } = await mcp.client.listTools();
   expect(tools.map(tool => tool.name).sort()).toEqual([
-    'check_uploads', 'create_upload', 'delete_file_permanently', 'delete_files_permanently', 'get_file',
-    'get_file_filters', 'list_files', 'restore_file', 'restore_files', 'trash_file', 'trash_files', 'upload_file', 'whoami',
+    'check_uploads', 'create_upload', 'delete_file_permanently', 'delete_files_permanently', 'get_download_link',
+    'get_file', 'get_file_filters', 'list_files', 'restore_file', 'restore_files', 'trash_file', 'trash_files',
+    'upload_file', 'upload_file_reference', 'whoami',
   ]);
   for (const name of ['trash_file', 'delete_file_permanently', 'upload_file']) {
     expect(tools.find(tool => tool.name === name)?.annotations?.destructiveHint).toBe(true);
@@ -153,8 +154,9 @@ test('rejects invalid uploads and cross-origin mutations without changing the sh
   expect(await shelf.files()).toEqual([]);
 });
 
-test('uses the HTTP upload URL returned by create_upload', async ({ mcp, shelf }) => {
-  const upload = await mcp.call<{ uploadId: string; uploadUrl: string }>('create_upload');
+test('transfers the original bytes over HTTP using MCP links', async ({ app, mcp, shelf }) => {
+  const upload = await mcp.call<{ uploadId: string; uploadUrl: string; maxFileBytes: number }>('create_upload');
+  expect(upload.maxFileBytes).toBe(app.config.maxFileBytes);
   const bytes = await fixtureBytes('data.csv');
   const response = await shelf.http.put(`${upload.uploadUrl}?path=http-bridge.csv`, {
     headers: { 'Content-Type': 'text/csv' }, data: bytes,
@@ -164,5 +166,9 @@ test('uses the HTTP upload URL returned by create_upload', async ({ mcp, shelf }
   expect(await mcp.call<SharedFile>('get_file', { id: file.id })).toMatchObject({
     uploadId: upload.uploadId, path: 'http-bridge.csv', source: 'web', uploaderEmail: 'e2e@example.test',
   });
-  expect(await (await shelf.http.get(file.url)).body()).toEqual(bytes);
+  const downloaded = await mcp.call<{ downloadUrl: string }>('get_download_link', { id: file.id });
+  const attachment = await shelf.http.get(downloaded.downloadUrl);
+  expect(attachment.status()).toBe(200);
+  expect(attachment.headers()['content-disposition']).toMatch(/^attachment;/);
+  expect(await attachment.body()).toEqual(bytes);
 });
