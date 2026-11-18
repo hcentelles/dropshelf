@@ -18,15 +18,15 @@ The deployment guide uses a 14-day browser session, a 15-minute MCP access token
 
 Use Access to change or revoke access. Do not rely on a policy edit to invalidate every token already issued at once. Existing tokens can remain valid until expiry or revocation. Keep the browser cookie HttpOnly and restrict OAuth return addresses to the clients used by the instance.
 
-An Access-authenticated MCP call can issue a single-use link for one upload path or one file version. The Worker checks the signature, content origin, method, and ten-minute expiry. SQLite consumes the grant in one operation before bytes move. The uploader comes from the verified identity that requested the link. Treat the link as a credential until it is used or expires.
+An Access-authenticated MCP call can issue a single-use link for one upload path or one file version. The Worker checks the signature, transfer origin, method, and ten-minute expiry. SQLite consumes the grant in one operation before bytes move. The uploader comes from the verified identity that requested the link. Treat the link as a credential until it is used or expires.
 
-The content hostname's `/transfer/` route uses this link check. Access continues to protect the app, MCP, and normal content URLs. The content Worker's generated configuration omits automatic invocation logs that could store transfer URLs. Application logs omit the token.
+The transfer hostname accepts requests only on `/transfer/` with a valid link. Access protects the app, MCP, and normal content URLs. The transfer Worker's generated configuration omits automatic invocation logs that could store transfer URLs. Application logs omit the token.
 
 Any approved team member can set a file or folder to expire in 30 days or make it permanent. The server sets the time and applies folder actions in one SQLite transaction. Browser origin checks protect the write endpoint. Permanence prevents automatic expiry from Files; it does not prevent an approved member from moving the item to Trash or deleting it from Trash.
 
 ## Uploaded HTML and SVG
 
-Uploaded content must use a different origin from the app. The content origin serves files and accepts uploads through the signed transfer route. The app origin contains the file list, batch API, and MCP tools. It does not serve uploaded HTML or SVG, including through image preview endpoints.
+Uploaded content must use a different origin from the app. The content origin serves files. The transfer origin accepts uploads and serves files as attachments. The app origin contains the file list, batch API, and MCP tools. It does not serve uploaded HTML or SVG, including through image preview endpoints.
 
 File responses use `X-Content-Type-Options: nosniff`, a private no-store cache policy, and a content security policy. The policy allows inline page scripts and styles, relative images, and HTTPS display resources. It blocks `fetch` and other API connections, form submission, plugins, and framing. This protects the application while allowing useful static HTML reviews. It is not an anonymous malware analysis sandbox.
 

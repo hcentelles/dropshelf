@@ -55,6 +55,8 @@ try {
   const appOrigin = origin(requireString(config, 'appOrigin'));
   const contentOrigin = origin(requireString(config, 'contentOrigin'));
   if (appOrigin === contentOrigin) throw new Error('Use separate app and content origins.');
+  const transferOrigin = config.transferOrigin === undefined ? '' : origin(requireString(config, 'transferOrigin'));
+  if (transferOrigin === appOrigin || transferOrigin === contentOrigin) throw new Error('Use a separate origin for transfer links.');
   const teamDomain = requireString(config, 'accessTeamDomain', /^[a-z0-9-]+\.cloudflareaccess\.com$/);
   const aud = requireString(config, 'accessAud', /^[a-f0-9]{64}$/);
   const maxBytes = config.maxFileBytes ?? 104857600;
@@ -87,7 +89,9 @@ try {
     },
     r2_buckets: [{ binding: 'FILES', bucket_name: bucket }],
   };
-  for (const [file, workerName] of [['app.jsonc', name], ['content.jsonc', `${name}-content`]]) {
+  const workers = [['app.jsonc', name], ['content.jsonc', `${name}-content`]];
+  if (transferOrigin) workers.push(['transfer.jsonc', `${name}-transfer`]);
+  for (const [file, workerName] of workers) {
     const path = resolve(outputPath, file);
     const store = file === 'app.jsonc' ? {
       triggers: { crons: ['0 * * * *'] },
@@ -96,14 +100,19 @@ try {
     } : {
       main: resolve(root, 'worker/content-worker.ts'),
       durable_objects: { bindings: [{ name: 'SHELF', class_name: 'Shelf', script_name: name }] },
-      // A transfer URL contains a credential. Keep application logs and omit invocation URLs.
-      observability: { ...common.observability, logs: { enabled: true, invocation_logs: false } },
     };
+    const cfg = { ...common, ...store, name: workerName };
+    if (transferOrigin && file !== 'content.jsonc') cfg.vars = { ...cfg.vars, TRANSFER_ORIGIN: transferOrigin };
+    if (file === 'transfer.jsonc') {
+      delete cfg.assets;
+      // A transfer URL contains a credential. Keep application logs and omit invocation URLs.
+      cfg.observability = { ...common.observability, logs: { enabled: true, invocation_logs: false } };
+    }
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-    await writeFile(path, `${JSON.stringify({ ...common, ...store, name: workerName }, null, 2)}\n`, { mode: 0o600 });
+    await writeFile(path, `${JSON.stringify(cfg, null, 2)}\n`, { mode: 0o600 });
   }
   console.log(`Instance configuration created in ${resolve(outputPath)}.`);
-  console.log('The two Workers share R2 and one SQLite Durable Object. Access must protect both hostnames.');
+  console.log('The Workers share R2 and one SQLite Durable Object. Access must protect the app and content hostnames.');
 } catch (error) {
   console.error(error instanceof Error ? error.message : 'The configuration could not be created.');
   process.exit(1);

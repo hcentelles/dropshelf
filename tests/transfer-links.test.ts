@@ -9,6 +9,7 @@ import { prepareDownloadLink, prepareUploadLink } from '../worker/transfer-links
 
 const configured = {
   ...env, APP_ORIGIN: 'https://app.example.test', CONTENT_ORIGIN: 'https://content.example.test',
+  TRANSFER_ORIGIN: 'https://transfer.example.test',
   ACCESS_TEAM_DOMAIN: 'example.cloudflareaccess.com', ACCESS_AUD: 'test-audience', LOCAL_DEV_EMAIL: '',
   TRANSFER_SIGNING_KEY: 'a1'.repeat(32),
 };
@@ -28,6 +29,8 @@ it('rejects expired and invalid signatures and keeps the rest of the content hos
     expect((await call(`${url.origin}/transfer/${value}`, put)).status).toBe(403);
   }
   expect((await call(`${configured.APP_ORIGIN}${url.pathname}`, put)).status).toBe(401);
+  expect((await call(`${configured.CONTENT_ORIGIN}${url.pathname}`, put)).status).toBe(401);
+  expect((await call(`${url.origin}/mcp`)).status).toBe(403);
   const uploaded = await call(link.uploadUrl, put);
   expect(uploaded.status).toBe(201);
   const file = await uploaded.json<SharedFile>();

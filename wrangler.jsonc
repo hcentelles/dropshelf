@@ -20,6 +20,7 @@
     "ACCESS_TEAM_DOMAIN": "",
     "ACCESS_AUD": "",
     "TRANSFER_SIGNING_KEY": "",
+    "TRANSFER_ORIGIN": "",
     "SERVICE_TOKEN_LABELS": "{}",
     "LOCAL_DEV_EMAIL": "developer@example.test",
     "MAX_FILE_BYTES": "104857600",

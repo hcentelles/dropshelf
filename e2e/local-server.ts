@@ -51,7 +51,7 @@ export async function startLocalApp(): Promise<LocalApp> {
       tsconfig: relative(directory, resolve(root, 'tsconfig.worker.json')),
       assets: { ...template.assets, directory: relative(directory, resolve(root, 'dist')) },
       vars: { ...template.vars, APP_NAME: appName, APP_ORIGIN: appOrigin, CONTENT_ORIGIN: contentOrigin,
-        TRANSFER_SIGNING_KEY: randomBytes(32).toString('hex') },
+        TRANSFER_ORIGIN: contentOrigin, TRANSFER_SIGNING_KEY: randomBytes(32).toString('hex') },
     }));
   } catch (error) {
     await rm(directory, { recursive: true, force: true });

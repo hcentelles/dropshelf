@@ -3,7 +3,7 @@ import { acceptFile } from '../shared/formats';
 import type { Principal, ReplaceFile, SharedFile } from '../shared/types';
 import { serveTransferAttachment } from './content';
 import { createUpload, uploadFile } from './files';
-import { allowedFileTypes, cleanPath, HttpError, json, maxFileBytes } from './http';
+import { allowedFileTypes, cleanPath, HttpError, json, maxFileBytes, origins } from './http';
 import { shelf } from './shelf-client';
 
 export const TRANSFER_PREFIX = '/transfer/';
@@ -24,13 +24,13 @@ export type TransferGrant =
 
 function signingKey(env: Env): Uint8Array | null {
   const key = env.TRANSFER_SIGNING_KEY;
-  if (!key) return null;
+  if (!key || !env.TRANSFER_ORIGIN) return null;
   if (!/^[a-f0-9]{64}$/.test(key)) throw new HttpError(503, 'Transfer links are not configured.');
   return new TextEncoder().encode(key);
 }
 
 async function issueLink(env: Env, key: Uint8Array, grant: TransferGrant) {
-  const origin = new URL(env.CONTENT_ORIGIN).origin;
+  const origin = origins(env).transfer!.origin;
   const id = crypto.randomUUID();
   const expiration = Math.floor(Date.now() / 1000) + LIFETIME_SECONDS;
   const token = await new SignJWT({ method: grant.method })

@@ -5,6 +5,7 @@
   "bucket": "dropshelf-demo-files",
   "appOrigin": "https://dropshelf-demo.your-subdomain.workers.dev",
   "contentOrigin": "https://dropshelf-demo-content.your-subdomain.workers.dev",
+  "transferOrigin": "https://dropshelf-demo-transfer.your-subdomain.workers.dev",
   "accessTeamDomain": "your-team.cloudflareaccess.com",
   "accessAud": "replace-with-your-access-application-audience",
   "maxFileBytes": 104857600,

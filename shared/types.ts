@@ -74,6 +74,7 @@ export interface AppConfig {
   user: Principal;
   appOrigin: string;
   contentOrigin: string;
+  transferOrigin?: string;
   maxFileBytes: number;
   allowedFileTypes: string[];
   mcpUrl: string;

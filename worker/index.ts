@@ -16,11 +16,11 @@ export { Shelf } from './shelf';
 
 async function route(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
-  const { app, content } = origins(env);
+  const { app, content, transfer } = origins(env);
+  if (url.origin === transfer?.origin && url.pathname.startsWith(TRANSFER_PREFIX)) return handleTransfer(request, env, url);
   if (url.origin !== app.origin && url.origin !== content.origin) {
     throw new HttpError(403, 'This hostname is not configured for this instance.');
   }
-  if (url.origin === content.origin && url.pathname.startsWith(TRANSFER_PREFIX)) return handleTransfer(request, env, url);
   const user = await authenticate(request, env);
   if (url.origin === content.origin) return serveContent(request, env, ctx);
   if (url.pathname === '/mcp') {
@@ -41,6 +41,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
     if (url.pathname === '/api/config' && request.method === 'GET') {
       // Return only public settings. Never serialize the environment or Access configuration.
       return json({ name: env.APP_NAME, user, appOrigin: app.origin, contentOrigin: content.origin,
+        transferOrigin: transfer?.origin,
         maxFileBytes: maxFileBytes(env), allowedFileTypes: allowedFileTypes(env),
         mcpUrl: `${app.origin}/mcp`, local: isLoopback(url.hostname), retention: retentionPolicy(env) } satisfies AppConfig);
     }

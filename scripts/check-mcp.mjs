@@ -118,7 +118,7 @@ try {
     assert.ok(checked.path === path && !checked.existing && !checked.error, 'The test path must be free.');
     const upload = await call('create_upload', { path, sizeBytes: bytes.length, contentType: 'application/json' });
     const uploadUrl = new URL(upload.uploadUrl);
-    assert.equal(uploadUrl.origin, config.contentOrigin);
+    assert.equal(uploadUrl.origin, config.transferOrigin);
     assert.ok(uploadUrl.pathname.startsWith('/transfer/') && upload.method === 'PUT');
     assert.deepEqual(upload.headers, { 'Content-Type': 'application/json' });
     const withoutCookies = { credentials: 'omit', redirect: 'manual', signal: AbortSignal.timeout(30_000) };
@@ -135,7 +135,7 @@ try {
     assert.equal(record.uploaderEmail, identity.email);
     const download = await call('get_download_link', { id: file.id });
     const downloadUrl = new URL(download.downloadUrl);
-    assert.equal(downloadUrl.origin, config.contentOrigin);
+    assert.equal(downloadUrl.origin, config.transferOrigin);
     assert.ok(downloadUrl.pathname.startsWith('/transfer/') && download.method === 'GET');
     const downloaded = await fetch(downloadUrl, withoutCookies);
     assert.equal(downloaded.status, 200, 'The signed GET must work with the URL alone.');

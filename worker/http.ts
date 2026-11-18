@@ -17,17 +17,19 @@ export function isLoopback(host: string): boolean {
   return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
 }
 
-export function origins(env: Env): { app: URL; content: URL } {
+export function origins(env: Env): { app: URL; content: URL; transfer: URL | null } {
   const app = new URL(env.APP_ORIGIN);
   const content = new URL(env.CONTENT_ORIGIN);
-  for (const url of [app, content]) {
+  const transfer = env.TRANSFER_ORIGIN ? new URL(env.TRANSFER_ORIGIN) : null;
+  for (const url of transfer ? [app, content, transfer] : [app, content]) {
     if (url.username || url.password || url.pathname !== '/' || url.search || url.hash ||
       (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopback(url.hostname)))) {
       throw new HttpError(503, 'The instance origin is not valid.');
     }
   }
   if (app.origin === content.origin) throw new HttpError(503, 'Use separate app and content origins.');
-  return { app, content };
+  if (transfer?.origin === app.origin) throw new HttpError(503, 'Use a separate origin for transfer links.');
+  return { app, content, transfer };
 }
 
 export function maxFileBytes(env: Env): number {
