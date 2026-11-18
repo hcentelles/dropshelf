@@ -83,10 +83,13 @@ Ask the agent to transfer the file as-is. The server instructions tell clients t
 | Task | Tool and next step |
 | --- | --- |
 | Upload a file supplied by a compatible ChatGPT client | Call `upload_file_reference` with the native file reference. Drop Shelf streams the file from its temporary OpenAI file URL. The reference and result contain file details and URLs. |
-| Upload from a browser or HTTP client | Call `create_upload`. Select the file in Drop Shelf using `browserUploadUrl`, or send its bytes to `uploadUrl` as described below. The browser starts its own upload batch. |
-| Download a file | Find its ID with `list_files`, then call `get_download_link`. Save the attachment in a browser or an authenticated HTTP client. Return the link if the client cannot save it. |
+| Upload a local file | Call `create_upload` with `path`. Follow `usage` to send the file with `PUT` and the returned `Content-Type`. Reuse `uploadId` for more files in the same batch. |
+| Upload in a browser | Call `create_upload` without a path and open `browserUploadUrl`. Select the file in Drop Shelf. The browser starts its own batch. |
+| Download a file | Find its ID with `list_files`, then call `get_download_link`. Follow `usage` to save the attachment locally. Give the user `browserDownloadUrl` for an interactive download. |
 
-These tools carry no file bytes in MCP requests or results. Native file references depend on the client. ChatGPT may already have access to a file that you attach to a chat. To keep the file off ChatGPT, choose it on the Drop Shelf page or send it with an authenticated HTTP client. If a file reference fails, use a direct upload.
+These tools carry no file bytes in MCP requests or results. The authenticated MCP connection issues each single-use link. The link authorizes one request for ten minutes, without an Access token or browser cookies on that request. Use the returned method and URL. Keep the URL private and request a new one if it expires or a transfer stops. A download link applies to the file version at the time of issue.
+
+Native file references depend on the client. ChatGPT may already have access to a file that you attach to a chat. Select it on the Drop Shelf page or send it directly with an HTTP client to keep the file off ChatGPT. If the instance has not enabled single-use links, use the browser links or an HTTP client with Cloudflare Access authorization.
 
 ## Inline uploads
 
@@ -124,7 +127,7 @@ Use `list_files` to get the newest files by default. Set `sort` to `newest`, `ol
 
 1. Call `check_uploads` with `paths`, an array of up to 100 full relative paths.
 2. If a result contains `existing`, show the user the path and current file details. Ask before replacement.
-3. After approval, use the same path and pass `replace: { "id": "CURRENT_FILE_ID", "version": CURRENT_VERSION }` to `upload_file_reference` or `upload_file`. For a direct HTTP upload, send `replaceId` and `replaceVersion` as query parameters.
+3. After approval, use the same path and pass `replace: { "id": "CURRENT_FILE_ID", "version": CURRENT_VERSION }` to `create_upload`, `upload_file_reference`, or `upload_file`. If you use the Access-protected batch API directly, send `replaceId` and `replaceVersion` as query parameters.
 4. If the tool returns a conflict, read its current file details and ask again. Do not reuse approval for an older version.
 
 For example, after approval of version 1:
@@ -169,7 +172,7 @@ Automatic expiry uses the same file store for browser and MCP uploads. The defau
 
 Deletion removes the file record and stored bytes. Link reservations, the file ID, and an object-key hash remain. A deleted URL stays inactive. Start a new upload group to reuse a path after Trash or deletion. Restore fails while another active file uses that path; move the active file to Trash first.
 
-## Direct HTTP uploads
+## Access-protected batch uploads
 
 Use this method for any permitted file within the instance limit:
 
@@ -178,7 +181,7 @@ Use this method for any permitted file within the instance limit:
 3. Send a `PUT` with the raw file bytes, `Content-Type`, and `Content-Length`.
 4. Authenticate the HTTP request with the same Access OAuth token in `Authorization: Bearer ...`.
 
-The API streams the file to R2. The default instance file limit is 100 MiB. The list uses `web` for direct HTTP uploads and `mcp` for uploads by reference or inline content.
+The API streams the file to R2. The default instance file limit is 100 MiB. The list uses `web` for Access-protected batch HTTP uploads and `mcp` for uploads with single-use links, file references, or inline content.
 
 Example request shape, with credentials supplied by your client:
 
@@ -227,3 +230,5 @@ node scripts/check-mcp.mjs https://YOUR_APP_HOST/mcp
 Open the printed authorization URL in Chrome. The script checks the OAuth challenge, public-client registration, PKCE login, token refresh when issued, tool discovery, identity, and file listing. Tokens stay in memory.
 
 Add `--write` to create test HTML, SVG, Markdown, and CSV files in the instance. That mode also checks relative image paths, protected content URLs, and HTTP uploads with the same verified email. The script uses `127.0.0.1:8990` for its callback. Keep that port free during the check.
+
+Add `--transfer` to upload and download one generated JSON with single-use URLs. The script compares the SHA-256 digests and checks that each link rejects a repeat request. It uses OAuth for MCP and uses the signed URLs alone for the two HTTP transfers.

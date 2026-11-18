@@ -6,11 +6,12 @@ import { readFile } from 'node:fs/promises';
 
 const endpoint = process.argv[2];
 if (!endpoint || !endpoint.startsWith('https://')) {
-  console.error('Usage: node scripts/check-mcp.mjs https://YOUR_APP_HOST/mcp [--write]');
+  console.error('Usage: node scripts/check-mcp.mjs https://YOUR_APP_HOST/mcp [--write] [--transfer]');
   process.exit(1);
 }
 const target = new URL(endpoint);
 const write = process.argv.includes('--write');
+const transfer = process.argv.includes('--transfer');
 const callback = 'http://127.0.0.1:8990/callback';
 const verifier = randomBytes(32).toString('base64url');
 const state = randomBytes(24).toString('base64url');
@@ -109,6 +110,51 @@ try {
   const search = await call('list_files', { q: 'no-such-deployment-check-file', type: 'application/pdf' });
   assert.equal(search.total, 0);
   console.log('PASS: MCP SDK connection, tool discovery, verified identity, file listing, search, and filters.');
+  if (transfer) {
+    const config = await getJson(`${target.origin}/api/config`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const path = `transfer-check-${randomBytes(8).toString('hex')}.json`;
+    const bytes = Buffer.from(JSON.stringify({ nonce: randomBytes(64).toString('hex') }) + '\r\n');
+    const [checked] = await call('check_uploads', { paths: [path] });
+    assert.ok(checked.path === path && !checked.existing && !checked.error, 'The test path must be free.');
+    const upload = await call('create_upload', { path, sizeBytes: bytes.length, contentType: 'application/json' });
+    const uploadUrl = new URL(upload.uploadUrl);
+    assert.equal(uploadUrl.origin, config.contentOrigin);
+    assert.ok(uploadUrl.pathname.startsWith('/transfer/') && upload.method === 'PUT');
+    assert.deepEqual(upload.headers, { 'Content-Type': 'application/json' });
+    const withoutCookies = { credentials: 'omit', redirect: 'manual', signal: AbortSignal.timeout(30_000) };
+    const put = { ...withoutCookies, method: 'PUT', headers: upload.headers, body: bytes };
+    const uploaded = await fetch(uploadUrl, put);
+    assert.equal(uploaded.status, 201, 'The signed PUT must work with the URL alone.');
+    const file = await uploaded.json();
+    const replayedUpload = await fetch(uploadUrl, put);
+    assert.equal(replayedUpload.status, 403, 'The upload link must reject reuse.');
+    await replayedUpload.body?.cancel();
+
+    const record = await call('get_file', { id: file.id });
+    assert.ok(record.path === path && record.size === bytes.length && record.source === 'mcp');
+    assert.equal(record.uploaderEmail, identity.email);
+    const download = await call('get_download_link', { id: file.id });
+    const downloadUrl = new URL(download.downloadUrl);
+    assert.equal(downloadUrl.origin, config.contentOrigin);
+    assert.ok(downloadUrl.pathname.startsWith('/transfer/') && download.method === 'GET');
+    const downloaded = await fetch(downloadUrl, withoutCookies);
+    assert.equal(downloaded.status, 200, 'The signed GET must work with the URL alone.');
+    assert.equal(downloaded.headers.get('Content-Type'), 'application/json');
+    assert.match(downloaded.headers.get('Content-Disposition'), /^attachment;/);
+    const originalHash = createHash('sha256').update(bytes).digest('hex');
+    const downloadedHash = createHash('sha256').update(Buffer.from(await downloaded.arrayBuffer())).digest('hex');
+    assert.equal(downloadedHash, originalHash, 'The downloaded bytes must match the original.');
+    const replayedDownload = await fetch(downloadUrl, withoutCookies);
+    assert.equal(replayedDownload.status, 403, 'The download link must reject reuse.');
+    await replayedDownload.body?.cancel();
+    const browserDownload = await fetch(download.browserDownloadUrl, { ...withoutCookies, headers: { Accept: 'application/json' } });
+    assert.equal(browserDownload.status, 401, 'The normal content URL must still require Access.');
+    await browserDownload.body?.cancel();
+    console.log('PASS: Single-use upload and download without cookies or Access headers. SHA-256 matches.');
+    console.log(JSON.stringify({ path, size: record.size, sha256: downloadedHash,
+      put: uploaded.status, get: downloaded.status, replayPut: replayedUpload.status, replayGet: replayedDownload.status,
+      protectedDownload: browserDownload.status }));
+  }
   if (write) {
     const { uploadId } = await call('create_upload');
     const folder = `mcp-check-${uploadId}`;

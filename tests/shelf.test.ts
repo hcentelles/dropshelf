@@ -41,7 +41,9 @@ it('keeps metadata, owner checks, Trash, and deletion records after the object r
   await expect(uploadFile(env, { ...user, id: 'other-user' }, input(uploadId, 'other.html'))).rejects.toMatchObject({ status: 403 });
   await expect(uploadFile(env, user, input(uploadId, deleted.path))).rejects.toMatchObject({ status: 409 });
   expect(await deleteFilePermanently(env, deleted.id, true)).toEqual({ id: deleted.id, deleted: true });
-  expect(await database(sql => sql.exec('SELECT version FROM schema_migrations').toArray())).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }]);
+  expect(await database(sql => sql.exec('SELECT version FROM schema_migrations').toArray())).toEqual(
+    [1, 2, 3, 4, 5].map(version => ({ version })),
+  );
 });
 
 it('notifies two pages after HTTP and MCP changes, including after hibernation', async () => {

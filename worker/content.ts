@@ -1,6 +1,23 @@
 import { findContent } from './files';
 import { HttpError } from './http';
 import { downloadFolder } from './archive';
+import type { FileRow } from './file-record';
+
+function fileDisposition(name: string, mode: 'attachment' | 'inline'): string {
+  const encodedName = encodeURIComponent(name).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16)}`);
+  return `${mode}; filename*=UTF-8''${encodedName}`;
+}
+
+export async function serveTransferAttachment(env: Env, file: FileRow): Promise<Response> {
+  const object = await env.FILES.get(file.object_key);
+  if (!object) throw new HttpError(404, 'The stored file was not found.');
+  return new Response(object.body, { headers: {
+    'Content-Type': file.content_type,
+    'Content-Disposition': fileDisposition(file.name, 'attachment'),
+    'Content-Length': String(object.size),
+    'Content-Security-Policy': "default-src 'none'; sandbox; frame-ancestors 'none'",
+  } });
+}
 
 export async function serveContent(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -31,8 +48,8 @@ export async function serveContent(request: Request, env: Env, ctx: ExecutionCon
     // Files have their own origin and cannot connect to the application API.
     'Content-Security-Policy': "default-src 'self' https: data: blob:; script-src 'self' https: 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' https: 'unsafe-inline'; img-src 'self' https: data: blob:; connect-src 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'",
   });
-  const name = encodeURIComponent(row.name).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16)}`);
-  headers.set('Content-Disposition', `${url.searchParams.has('download') || row.content_type === 'application/zip' ? 'attachment' : 'inline'}; filename*=UTF-8''${name}`);
+  headers.set('Content-Disposition', fileDisposition(row.name,
+    url.searchParams.has('download') || row.content_type === 'application/zip' ? 'attachment' : 'inline'));
   headers.set('Content-Length', String(object.size));
   if (request.headers.get('If-None-Match') === object.httpEtag) return new Response(null, { status: 304, headers });
   return new Response(body, { headers });

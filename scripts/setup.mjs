@@ -96,6 +96,8 @@ try {
     } : {
       main: resolve(root, 'worker/content-worker.ts'),
       durable_objects: { bindings: [{ name: 'SHELF', class_name: 'Shelf', script_name: name }] },
+      // A transfer URL contains a credential. Keep application logs and omit invocation URLs.
+      observability: { ...common.observability, logs: { enabled: true, invocation_logs: false } },
     };
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
     await writeFile(path, `${JSON.stringify({ ...common, ...store, name: workerName }, null, 2)}\n`, { mode: 0o600 });

@@ -19,6 +19,7 @@
     "CONTENT_ORIGIN": "http://127.0.0.1:8787",
     "ACCESS_TEAM_DOMAIN": "",
     "ACCESS_AUD": "",
+    "TRANSFER_SIGNING_KEY": "",
     "SERVICE_TOKEN_LABELS": "{}",
     "LOCAL_DEV_EMAIL": "developer@example.test",
     "MAX_FILE_BYTES": "104857600",

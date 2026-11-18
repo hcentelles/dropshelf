@@ -125,4 +125,18 @@ export function initializeSchema(storage: DurableObjectStorage): void {
       `);
     });
   }
+  if (version < 5) {
+    storage.transactionSync(() => {
+      sql.exec(`
+        CREATE TABLE transfer_grants (
+          id TEXT PRIMARY KEY,
+          method TEXT NOT NULL CHECK (method IN ('GET', 'PUT')),
+          grant_json TEXT NOT NULL,
+          expires_at INTEGER NOT NULL
+        );
+        CREATE INDEX transfer_grants_expiry ON transfer_grants(expires_at);
+        INSERT INTO schema_migrations (version) VALUES (5);
+      `);
+    });
+  }
 }

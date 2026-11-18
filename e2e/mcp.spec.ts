@@ -154,21 +154,37 @@ test('rejects invalid uploads and cross-origin mutations without changing the sh
   expect(await shelf.files()).toEqual([]);
 });
 
-test('transfers the original bytes over HTTP using MCP links', async ({ app, mcp, shelf }) => {
-  const upload = await mcp.call<{ uploadId: string; uploadUrl: string; maxFileBytes: number }>('create_upload');
+test('transfers the original bytes with single-use HTTP links and no cookies', async ({ app, mcp }) => {
+  const path = 'http-bridge.json';
+  const bytes = await fixtureBytes('data.json');
+  const upload = await mcp.call<{ uploadId: string; uploadUrl: string; headers: Record<string, string>; maxFileBytes: number; method: string }>(
+    'create_upload', { path, sizeBytes: bytes.byteLength });
   expect(upload.maxFileBytes).toBe(app.config.maxFileBytes);
-  const bytes = await fixtureBytes('data.csv');
-  const response = await shelf.http.put(`${upload.uploadUrl}?path=http-bridge.csv`, {
-    headers: { 'Content-Type': 'text/csv' }, data: bytes,
-  });
-  expect(response.status(), await response.text()).toBe(201);
+  expect(upload.method).toBe('PUT');
+  expect(new URL(upload.uploadUrl).origin).toBe(app.contentOrigin);
+  expect(upload.headers).toEqual({ 'Content-Type': 'application/json' });
+  const noCookies = { credentials: 'omit', redirect: 'error' } as const;
+  const wrongMethod = await fetch(upload.uploadUrl, noCookies);
+  expect(wrongMethod.status).toBe(405);
+  await wrongMethod.body?.cancel();
+
+  const send = () => fetch(upload.uploadUrl, { ...noCookies, method: upload.method, headers: upload.headers, body: bytes });
+  const results = await Promise.all([send(), send()]);
+  expect(results.map(response => response.status).sort()).toEqual([201, 403]);
+  await results.find(response => response.status === 403)!.body?.cancel();
+  const response = results.find(result => result.status === 201)!;
   const file = await response.json() as SharedFile;
   expect(await mcp.call<SharedFile>('get_file', { id: file.id })).toMatchObject({
-    uploadId: upload.uploadId, path: 'http-bridge.csv', source: 'web', uploaderEmail: 'e2e@example.test',
+    uploadId: upload.uploadId, path, source: 'mcp', uploaderEmail: 'e2e@example.test',
   });
-  const downloaded = await mcp.call<{ downloadUrl: string }>('get_download_link', { id: file.id });
-  const attachment = await shelf.http.get(downloaded.downloadUrl);
-  expect(attachment.status()).toBe(200);
-  expect(attachment.headers()['content-disposition']).toMatch(/^attachment;/);
-  expect(await attachment.body()).toEqual(bytes);
+  const downloaded = await mcp.call<{ downloadUrl: string; method: string }>('get_download_link', { id: file.id });
+  expect(downloaded.method).toBe('GET');
+  expect(new URL(downloaded.downloadUrl).origin).toBe(app.contentOrigin);
+  const attachment = await fetch(downloaded.downloadUrl, noCookies);
+  expect(attachment.status).toBe(200);
+  expect(attachment.headers.get('content-disposition')).toMatch(/^attachment;/);
+  expect(Buffer.from(await attachment.arrayBuffer())).toEqual(bytes);
+  const used = await fetch(downloaded.downloadUrl, noCookies);
+  expect(used.status).toBe(403);
+  await used.body?.cancel();
 });

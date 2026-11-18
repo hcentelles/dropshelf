@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
@@ -50,7 +50,8 @@ export async function startLocalApp(): Promise<LocalApp> {
       main: relative(directory, resolve(root, 'worker/index.ts')),
       tsconfig: relative(directory, resolve(root, 'tsconfig.worker.json')),
       assets: { ...template.assets, directory: relative(directory, resolve(root, 'dist')) },
-      vars: { ...template.vars, APP_NAME: appName, APP_ORIGIN: appOrigin, CONTENT_ORIGIN: contentOrigin },
+      vars: { ...template.vars, APP_NAME: appName, APP_ORIGIN: appOrigin, CONTENT_ORIGIN: contentOrigin,
+        TRANSFER_SIGNING_KEY: randomBytes(32).toString('hex') },
     }));
   } catch (error) {
     await rm(directory, { recursive: true, force: true });

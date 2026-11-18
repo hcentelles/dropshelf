@@ -121,8 +121,8 @@ Available tools:
 | `list_files` | Search and filter files, and get the next page cursor |
 | `get_file_filters` | Get file types and authors for the selected view |
 | `get_file` | Get a file record and protected URLs |
-| `get_download_link` | Get the protected attachment link and file details |
-| `create_upload` | Start a direct HTTP upload or open the browser upload page |
+| `get_download_link` | Get a single-use attachment link and file details |
+| `create_upload` | Get a single-use upload link or start an upload batch |
 | `check_uploads` | Check full paths and get current files before replacement approval |
 | `upload_file_reference` | Copy the original bytes from a file reference that ChatGPT provides |
 | `upload_file` | Upload content sent inline in the tool call |
@@ -131,7 +131,7 @@ Available tools:
 | `delete_file_permanently` | Remove a file from Trash after explicit confirmation |
 | `trash_files`, `restore_files`, `delete_files_permanently` | Manage up to 10 selected file IDs per call |
 
-To transfer an existing file as-is, use `upload_file_reference` or send the bytes directly with `create_upload`. Use `get_download_link` for downloads. These paths keep file bytes out of MCP messages. See [file transfers](docs/mcp.md#transfer-files-as-is).
+To transfer a local file as-is, pass its destination path to `create_upload` and follow the returned HTTP instructions. Use `upload_file_reference` for a file reference from a compatible client. Use `get_download_link` for downloads. The single-use links authorize the HTTP requests and keep file bytes out of MCP messages. See [file transfers](docs/mcp.md#transfer-files-as-is).
 
 For a folder, call `create_upload`. Use its upload ID and a relative path for each file. Folders with the same full path merge across upload groups. HTML can load images, CSS, and JavaScript added to that folder in later uploads.
 

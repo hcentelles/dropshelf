@@ -11,6 +11,7 @@ import { manageFiles } from './bulk';
 import type { BulkAction } from '../shared/types';
 import { retentionPolicy, type RetentionMode } from '../shared/retention';
 import { runRetention } from './retention';
+import { handleTransfer, TRANSFER_PREFIX } from './transfer-links';
 export { Shelf } from './shelf';
 
 async function route(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -19,6 +20,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   if (url.origin !== app.origin && url.origin !== content.origin) {
     throw new HttpError(403, 'This hostname is not configured for this instance.');
   }
+  if (url.origin === content.origin && url.pathname.startsWith(TRANSFER_PREFIX)) return handleTransfer(request, env, url);
   const user = await authenticate(request, env);
   if (url.origin === content.origin) return serveContent(request, env, ctx);
   if (url.pathname === '/mcp') {
@@ -145,9 +147,11 @@ export default {
   async fetch(request, env, ctx) {
     try { return secureResponse(await route(request, env, ctx)); }
     catch (error) {
-      if (isHttpError(error)) return secureResponse(json({ error: error.message, ...error.details }, error.status));
-      console.error(JSON.stringify({ event: 'request_failed', path: new URL(request.url).pathname,
-        message: error instanceof Error ? error.message : 'Unknown error' }));
+      const path = new URL(request.url).pathname;
+      const transfer = path.startsWith(TRANSFER_PREFIX);
+      if (isHttpError(error)) return secureResponse(json({ error: error.message, ...(transfer ? {} : error.details) }, error.status));
+      console.error(JSON.stringify({ event: 'request_failed', path: transfer ? TRANSFER_PREFIX : path,
+        ...(transfer ? {} : { message: error instanceof Error ? error.message : 'Unknown error' }) }));
       return secureResponse(json({ error: 'The request failed. Try again.' }, 500));
     }
   },

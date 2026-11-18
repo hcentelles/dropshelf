@@ -100,9 +100,17 @@ npx wrangler deploy --config "$HOME/.config/dropshelf/demo/app.jsonc" --profile 
 npx wrangler deploy --config "$HOME/.config/dropshelf/demo/content.jsonc" --profile shelf-demo
 ```
 
-Deploy the app first so its Durable Object namespace exists before the content Worker is deployed. The Workers share storage and the file service. The app origin serves the UI, API, and MCP. The content origin serves only uploaded files. Access protects both.
+For a new instance, deploy the app first to create its Durable Object namespace. The Workers share storage and the file service. The app origin serves the UI, API, and MCP. The content origin serves uploaded files. Access protects both.
 
 If Access does not show a login page on a `workers.dev` address, review that Worker's **Settings → Domains & Routes → Cloudflare Access** and the Access application hostname list. Do not relax the Worker token check to work around a routing error.
+
+### Enable single-use transfers
+
+Generate a separate 32-byte random key for each instance with `openssl rand -hex 32`. Supply its lowercase hex value as the `TRANSFER_SIGNING_KEY` Worker secret on both Workers for that instance. Use a private JSON file with `wrangler deploy --secrets-file` to set the same key on both deployments without printing it. Future deployments preserve the secret. Rotate both copies together.
+
+Add a separate Access application with the exact content hostname and the path `/transfer`. Attach a Bypass policy to that application only. The more specific path lets signed transfer requests reach the content Worker, which verifies the signature and consumes the grant. Keep the regular Access applications for the whole app and content hostnames. See [Access application paths](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/).
+
+For an existing instance, deploy the content Worker first. Check that `/transfer/invalid` on the content host reaches the Worker and returns `403`. Check that `/mcp` and a regular content URL still require Access. Then deploy the app with the same signing key and run `node scripts/check-mcp.mjs https://YOUR_APP_HOST/mcp --transfer`. The generated content configuration disables automatic request URL logs to protect the transfer credentials.
 
 ## 7. Verify
 

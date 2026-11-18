@@ -61,10 +61,10 @@ test('uploads JSON through the browser link from MCP and downloads the original 
   await expect(content).toHaveURL(file!.url);
   await expect(content.locator('body')).toContainText('JSON upload check');
   expect(new URL(content.url()).origin).toBe(app.contentOrigin);
-  const { downloadUrl } = await mcp.call<{ downloadUrl: string }>('get_download_link', { id: file!.id });
+  const { browserDownloadUrl } = await mcp.call<{ browserDownloadUrl: string }>('get_download_link', { id: file!.id });
   await item.getByLabel('More options for data.json').click();
   const link = item.getByRole('link', { name: 'Download file', exact: true });
-  await expect(link).toHaveAttribute('href', downloadUrl);
+  await expect(link).toHaveAttribute('href', browserDownloadUrl);
   const downloaded = page.waitForEvent('download');
   await link.click();
   const download = await downloaded;

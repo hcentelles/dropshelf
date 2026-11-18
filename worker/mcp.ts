@@ -9,6 +9,7 @@ import { deleteFilePermanently, restoreFile, trashFile } from './trash';
 import { getFileFilters } from './files';
 import { manageFiles } from './bulk';
 import { uploadFileReference } from './file-transfer';
+import { prepareDownloadLink, prepareUploadLink } from './transfer-links';
 
 export const MAX_MCP_BODY = 8 * 1024 * 1024;
 const MAX_MCP_FILE = 5 * 1024 * 1024;
@@ -20,7 +21,7 @@ const uploadDestination = {
 export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, user: Principal): Promise<Response> {
   function serverFactory(): McpServer {
     const server = new McpServer({ name: 'dropshelf', version: '0.1.0' }, {
-      instructions: 'For transfer-only requests, keep file bytes out of the model. Use upload_file_reference for a client-provided file reference, or create_upload for direct HTTP or browser transfer. Use get_download_link for downloads and save the attachment without opening it. Use upload_file only for content the user intends to send inline. Never read, preview, re-encode, or paste a file into tool arguments for a transfer.',
+      instructions: 'For transfer-only requests, keep file bytes out of the model. For a local file, call create_upload with its destination path and follow the returned HTTP instructions. For a client-provided file reference, use upload_file_reference. Use get_download_link to save an attachment without opening it. Single-use links authorize their own requests. Keep these links private and request a new link if one expires or a transfer stops. Use upload_file only for content the user intends to send inline.',
     });
     const result = async (action: () => Promise<unknown>) => {
       try {
@@ -50,12 +51,12 @@ export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, use
     }, ({ id }) => result(() => getFile(env, id)));
     server.registerTool('get_download_link', {
       title: 'Download an original file',
-      description: 'Get a protected attachment link for a transfer-only download. Return the link to the user or save it with a browser or HTTP client without opening the file or returning its bytes to the model. Use list_files to find the file ID.',
+      description: 'Get an attachment link for a transfer-only download. When single-use transfers are enabled, downloadUrl authorizes one GET for ten minutes. Follow usage with an HTTP client to save the original bytes to a local file without opening it. Use the Access-protected browserDownloadUrl for an interactive download. Use list_files to find the file ID.',
       inputSchema: { id: z.uuid() }, annotations: { readOnlyHint: true },
     }, ({ id }) => result(async () => {
       const file = await getFile(env, id);
       if (file.trashedAt !== null || file.deletionPending) throw new HttpError(404, 'The file was not found.');
-      return { id: file.id, name: file.name, path: file.path, contentType: file.contentType, size: file.size, downloadUrl: file.downloadUrl };
+      return prepareDownloadLink(env, user, file);
     }));
     server.registerTool('trash_file', {
       description: 'Move a file to Trash. Shared links stop serving it. Any approved member can restore it until permanent deletion starts.',
@@ -82,14 +83,22 @@ export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, use
       }, ({ ids, confirm }) => result(() => manageFiles(env, user, action, ids, confirm === true)));
     }
     server.registerTool('create_upload', {
-      description: 'Start a direct upload of any allowed size with no file contents in MCP. Use a client to PUT the original bytes to uploadUrl with ?path=relative/path, Content-Type, Content-Length, and Access authorization. If the client cannot do this, open browserUploadUrl and select the files in Drop Shelf. Check existing paths first. A confirmed HTTP replacement also requires replaceId and replaceVersion query parameters.',
-    }, () => result(async () => {
+      description: 'Pass a destination path to get a single-use uploadUrl for that file. The link authorizes one PUT for ten minutes. Follow usage and send the original bytes with an HTTP client. Check existing paths first and supply replace for a confirmed replacement. Reuse an uploadId to group files. Call without a path to start a batch or get browserUploadUrl for interactive upload. The batch uploadUrl requires Cloudflare Access.',
+      inputSchema: {
+        path: z.string().min(1).max(1024).optional(), contentType: z.string().max(100).optional(),
+        sizeBytes: z.number().int().nonnegative().optional(), ...uploadDestination,
+      },
+    }, ({ path, contentType, sizeBytes, uploadId, replace }) => result(async () => {
       const origin = new URL(env.APP_ORIGIN).origin;
-      const fileLimit = maxFileBytes(env);
-      const uploadId = await createUpload(env, user);
+      const settings = { browserUploadUrl: `${origin}/#drop-zone`, maxFileBytes: maxFileBytes(env), maxMcpFileBytes: MAX_MCP_FILE };
+      if (path !== undefined) return { ...settings, ...await prepareUploadLink(env, user, { path, contentType, sizeBytes, uploadId, replace }) };
+      if (contentType !== undefined || sizeBytes !== undefined || uploadId !== undefined || replace !== undefined) {
+        throw new HttpError(400, 'Supply a destination path to request a single-use upload link.');
+      }
+      const batchId = await createUpload(env, user);
       return {
-        uploadId, uploadUrl: `${origin}/api/uploads/${uploadId}`, browserUploadUrl: `${origin}/#drop-zone`,
-        maxFileBytes: fileLimit, maxMcpFileBytes: MAX_MCP_FILE,
+        ...settings, uploadId: batchId, uploadUrl: `${origin}/api/uploads/${batchId}`,
+        usage: 'For a single-use link, call create_upload again with a path and this uploadId. For a batch HTTP upload, use Cloudflare Access with PUT, path, Content-Type, and Content-Length.',
       };
     }));
     server.registerTool('check_uploads', {

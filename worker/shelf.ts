@@ -10,6 +10,7 @@ import { retentionPolicy, type RetentionMode } from '../shared/retention';
 import { beginExpiredDeletion, moveExpiredToTrash } from './retention-store';
 import { removeDeletedRetention, setRetention } from './retention-settings';
 import { folderArchiveFiles } from './archive-store';
+import type { TransferGrant } from './transfer-links';
 
 // One object owns the metadata and live connections for one private shelf.
 // The Workers stream file bodies directly to and from R2.
@@ -53,6 +54,19 @@ export class Shelf extends DurableObject<Env> {
   }
 
   getFile(id: string): SharedFile { return present(this.#file(id), this.env); }
+
+  issueTransfer(id: string, grant: TransferGrant, expiresAt: number): void {
+    const sql = this.ctx.storage.sql;
+    sql.exec('DELETE FROM transfer_grants WHERE expires_at <= ?', Date.now());
+    sql.exec('INSERT INTO transfer_grants (id, method, grant_json, expires_at) VALUES (?, ?, ?, ?)',
+      id, grant.method, JSON.stringify(grant), expiresAt);
+  }
+
+  consumeTransfer(id: string, method: TransferGrant['method']): TransferGrant | null {
+    const row = this.ctx.storage.sql.exec<{ grant_json: string }>(`DELETE FROM transfer_grants
+      WHERE id = ? AND method = ? AND expires_at > ? RETURNING grant_json`, id, method, Date.now()).toArray()[0];
+    return row ? JSON.parse(row.grant_json) as TransferGrant : null;
+  }
 
   checkUploads(paths: string[]) { return this.uploads.check(paths); }
   async reserveUpload(user: Principal, input: UploadMetadata) { return this.uploads.reserve(user, input); }

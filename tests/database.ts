@@ -11,5 +11,5 @@ export async function prepareDatabase(): Promise<void> {
 }
 
 export async function resetDatabase(): Promise<void> {
-  await database(sql => { sql.exec('DELETE FROM retention_settings; DELETE FROM upload_writes; DELETE FROM retired_objects; DELETE FROM file_links; DELETE FROM files; DELETE FROM uploads; DELETE FROM deleted_files;'); });
+  await database(sql => { sql.exec('DELETE FROM transfer_grants; DELETE FROM retention_settings; DELETE FROM upload_writes; DELETE FROM retired_objects; DELETE FROM file_links; DELETE FROM files; DELETE FROM uploads; DELETE FROM deleted_files;'); });
 }
