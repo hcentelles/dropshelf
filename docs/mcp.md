@@ -92,10 +92,28 @@ Ask the agent to transfer the file as-is. The server instructions tell clients t
 | --- | --- |
 | Upload a file supplied by a compatible ChatGPT client | Call `upload_file_reference` with the native file reference. Drop Shelf streams the file from its temporary OpenAI file URL. The reference and result contain file details and URLs. |
 | Upload a local file | Call `create_upload` with `path`. Follow `usage` to send the file with `PUT` and the returned `Content-Type`. Reuse `uploadId` for more files in the same batch. |
+| Upload a local folder | Call `create_upload` with `folder`. Pass the returned link to a script that sends the file list and transfers its files by HTTP. |
 | Upload in a browser | Call `create_upload` without a path and open `browserUploadUrl`. Select the file in Drop Shelf. The browser starts its own batch. |
 | Download a file | Find its ID with `list_files`, then call `get_download_link`. Follow `usage` to save the attachment locally. Give the user `browserDownloadUrl` for an interactive download. |
 
-These tools carry no file bytes in MCP requests or results. The authenticated MCP connection issues each single-use link. The link authorizes one request for ten minutes, without an Access token or browser cookies on that request. Use the returned method and URL. Keep the URL private and request a new one if it expires or a transfer stops. A download link applies to the file version at the time of issue.
+These tools carry no file bytes in MCP requests or results. The authenticated MCP connection starts each transfer. A single-use link authorizes one HTTP request for ten minutes. Use the returned method and URL. Keep the URL private and request a new one if it expires or a transfer stops. A download link applies to the file version at the time of issue.
+
+### Upload a folder with a signed batch
+
+Call `create_upload` once with the relative destination folder, such as `{"folder":"audit/project/run"}`. Pass `uploadUrl` to a local script. The script sends a JSON manifest with `POST` and `Content-Type: application/json`. Get the file sizes from the local filesystem.
+
+```json
+{
+  "files": [
+    { "path": "robots.txt", "sizeBytes": 15 },
+    { "path": "snapshot/sitemap.xml", "sizeBytes": 49, "contentType": "text/xml" }
+  ]
+}
+```
+
+Each manifest path is relative to the destination folder. A batch supports up to 256 files and 1 GiB in total. The instance's per-file size limit also applies. The response contains `uploadId`, `expiresAt`, and a `files` array. Each entry contains the submitted `path`, `sizeBytes`, `uploadUrl`, and `headers`. The script sends one `PUT` per entry with the returned `Content-Type`, the file's `Content-Length`, and its original bytes. Both the manifest and the file requests use the signed URLs for access. The script can keep the individual URLs and file contents outside the chat.
+
+The file links expire ten minutes after the manifest succeeds. A file upload at an existing path returns `409`. To resume an incomplete upload, check which files arrived and call `create_upload` with the same `folder` and `uploadId`. Submit only the remaining files. Use `list_folder` to get the IDs and protected links for completed uploads.
 
 Native file references depend on the client. ChatGPT may already have access to a file that you attach to a chat. Select it on the Drop Shelf page or send it directly with an HTTP client to keep the file off ChatGPT. If the instance has not enabled single-use links, use the browser links or an HTTP client with Cloudflare Access authorization.
 
@@ -130,6 +148,8 @@ For inline JSON, use a `.json` path and pass the JSON text in `content`. You can
 Folders merge by full path across upload groups. HTML can load relative assets added in later groups. Paths are case-sensitive. A file and a folder cannot use the same full path.
 
 Use `list_files` to get the newest files by default. Set `sort` to `newest`, `oldest`, or `name` (A–Z). Date sorting uses the last update time for files and the time moved to Trash for Trash. Name sorting ignores ASCII letter case and uses the file ID to break ties. Pass `nextCursor` as `cursor` on the next call. Keep the same `view`, `q`, `type`, `author`, and `sort` on every page. Start without a cursor when you change the sort order. Use `get_file` with an ID to get one record.
+
+Use `list_folder` to browse by path. For example, `{"folder":"audit/project","sort":"name"}` lists its direct subfolders and files. Omit `folder` to start at the root. Set `recursive: true` to list files in the folder and all its subfolders. File entries include an ID, path, and Access-protected links. Keep the same `folder`, `recursive`, and `sort` values when you pass `nextCursor` as `cursor`.
 
 ## Replace an existing file
 
@@ -240,3 +260,5 @@ Open the printed authorization URL in Chrome. The script checks the OAuth challe
 Add `--write` to create test HTML, SVG, Markdown, and CSV files in the instance. That mode also checks relative image paths, protected content URLs, and HTTP uploads with the same verified email. The script uses `127.0.0.1:8990` for its callback. Keep that port free during the check.
 
 Add `--transfer` to upload and download one generated JSON with single-use URLs. The script compares the SHA-256 digests and checks that each link rejects a repeat request. It uses OAuth for MCP and uses the signed URLs alone for the two HTTP transfers.
+
+Add `--batch` to check a 160-file manifest with one MCP upload call. The script uploads and downloads three sample files in the batch, checks their bytes, and verifies folder listing and replay errors.

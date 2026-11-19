@@ -164,9 +164,10 @@
               <div><dt><code>whoami</code></dt><dd>Check your upload identity.</dd></div>
               <div><dt><code>submit_feedback</code></dt><dd>Send an issue and a proposed fix to the team's Slack channel.</dd></div>
               <div><dt><code>list_files</code></dt><dd>Search by file name and filter by type or author.</dd></div><div><dt><code>get_file_filters</code></dt><dd>Get file types and authors.</dd></div>
+              <div><dt><code>list_folder</code></dt><dd>List files and subfolders by path.</dd></div>
               <div><dt><code>get_file</code></dt><dd>Get file and download links.</dd></div>
               <div><dt><code>get_download_link</code></dt><dd>Get the link to download the original file.</dd></div>
-              <div><dt><code>create_upload</code></dt><dd>Start a direct file transfer.</dd></div>
+              <div><dt><code>create_upload</code></dt><dd>Get a signed link for a local file or folder.</dd></div>
               <div><dt><code>check_uploads</code></dt><dd>Check existing paths before replacement approval.</dd></div>
               <div><dt><code>upload_file_reference</code></dt><dd>Copy a file from a ChatGPT file reference.</dd></div>
               <div><dt><code>upload_file</code></dt><dd>Upload content sent in the tool call.</dd></div>
@@ -181,9 +182,9 @@
             <p><strong>Allowed types:</strong> <span id="mcp-allowed-types">Loading…</span></p>
             <p><strong>Inline MCP uploads:</strong> up to 5 MiB per file.</p>
             <p><strong>Web and HTTP uploads:</strong> <span id="mcp-file-limit">Loading…</span></p>
-            <p>For a folder, call <code>create_upload</code> once. Reuse its <code>uploadId</code> and keep each relative path so HTML can load its images.</p>
+            <p>For a local folder, pass <code>folder</code> to <code>create_upload</code> and follow the returned HTTP instructions in a script. Keep each relative path so HTML can load its images.</p>
             <p>Folders with the same full path merge. Before replacing a file, call <code>check_uploads</code>, ask for approval, then pass the file ID and version in <code>upload_file.replace</code>. The file link stays the same.</p>
-            <p class="setup-hint">For larger files, use the web app or ask <code>create_upload</code> for an HTTP upload URL. HTTP requests must use the same Access OAuth token.</p>
+            <p class="setup-hint">For larger files, use the web app or a signed upload link. Call <code>create_upload</code> with the destination <code>path</code>.</p>
           </section>
         </div>
         <details class="setup-details setup-card">

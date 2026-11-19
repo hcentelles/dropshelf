@@ -5,7 +5,7 @@ A private file shelf for teams. Drop files or folders, then copy links that open
 ## Features
 
 - Drop files and folders, or select them from your computer.
-- Configure allowed file types through a Worker variable. The default includes HTML, images, Markdown, CSV, JSON, PDF, CSS, JavaScript, and ZIP. Skip unsupported files and report the result.
+- Configure allowed file types through a Worker variable. The default includes HTML, images, Markdown, CSV, JSON, PDF, CSS, JavaScript, ZIP, plain text, and XML. Skip unsupported files and report the result.
 - Browse folders at each level, with parent links and browser history. Folder actions include all files below that folder.
 - Keep folder paths so relative images, CSS, and JavaScript work.
 - Keep open pages current through a live connection. Uploads, Trash changes, restores, and deletions appear without a page refresh.
@@ -90,7 +90,7 @@ Runtime settings are Cloudflare Worker environment variables or secrets, read th
 Set the `ALLOWED_FILE_TYPES` Worker variable to a comma-separated list of extensions or MIME types:
 
 ```text
-image/*,.html,.htm,.md,.markdown,.csv,.json,.pdf,.css,.js,.zip
+image/*,.html,.htm,.md,.markdown,.csv,.json,.pdf,.css,.js,.zip,.txt,.xml
 ```
 
 The browser picker, folder filter, server checks, and MCP tools use this setting. For deployment, set `allowedFileTypes` in your private instance file, generate the configuration again, and redeploy. A dashboard variable change must also be saved in that private file so a later deployment does not replace it.
@@ -120,10 +120,11 @@ Available tools:
 | `whoami` | Show the verified upload identity |
 | `submit_feedback` | Send a Drop Shelf issue and a proposed fix to the instance's Slack channel |
 | `list_files` | Search and filter files, and get the next page cursor |
+| `list_folder` | List the files and subfolders at one path or all files below it |
 | `get_file_filters` | Get file types and authors for the selected view |
 | `get_file` | Get a file record and protected URLs |
 | `get_download_link` | Get a single-use attachment link and file details |
-| `create_upload` | Get a single-use upload link or start an upload batch |
+| `create_upload` | Get a single-use link for a file or a folder upload |
 | `check_uploads` | Check full paths and get current files before replacement approval |
 | `upload_file_reference` | Copy the original bytes from a file reference that ChatGPT provides |
 | `upload_file` | Upload content sent inline in the tool call |
@@ -134,7 +135,7 @@ Available tools:
 
 To transfer a local file as-is, pass its destination path to `create_upload` and follow the returned HTTP instructions. Use `upload_file_reference` for a file reference from a compatible client. Use `get_download_link` for downloads. The single-use links authorize the HTTP requests and keep file bytes out of MCP messages. See [file transfers](docs/mcp.md#transfer-files-as-is).
 
-For a folder, call `create_upload`. Use its upload ID and a relative path for each file. Folders with the same full path merge across upload groups. HTML can load images, CSS, and JavaScript added to that folder in later uploads.
+For a local folder, pass its destination in `create_upload` as `folder`. The local script sends a file list to the returned link and receives the individual upload links by HTTP. Folders with the same full path merge across upload groups. See [signed batch uploads](docs/mcp.md#upload-a-folder-with-a-signed-batch).
 
 ## File replacement
 

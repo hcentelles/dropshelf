@@ -139,4 +139,21 @@ export function initializeSchema(storage: DurableObjectStorage): void {
       `);
     });
   }
+  if (version < 6) {
+    storage.transactionSync(() => {
+      sql.exec(`
+        ALTER TABLE transfer_grants RENAME TO single_file_grants;
+        CREATE TABLE transfer_grants (
+          id TEXT PRIMARY KEY,
+          method TEXT NOT NULL CHECK (method IN ('GET', 'PUT', 'POST')),
+          grant_json TEXT NOT NULL,
+          expires_at INTEGER NOT NULL
+        );
+        INSERT INTO transfer_grants SELECT id, method, grant_json, expires_at FROM single_file_grants;
+        DROP TABLE single_file_grants;
+        CREATE INDEX transfer_grants_expiry ON transfer_grants(expires_at);
+        INSERT INTO schema_migrations (version) VALUES (6);
+      `);
+    });
+  }
 }

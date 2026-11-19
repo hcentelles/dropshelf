@@ -10,7 +10,7 @@ import { retentionPolicy, type RetentionMode } from '../shared/retention';
 import { beginExpiredDeletion, moveExpiredToTrash } from './retention-store';
 import { removeDeletedRetention, setRetention } from './retention-settings';
 import { folderArchiveFiles } from './archive-store';
-import type { TransferGrant } from './transfer-links';
+import type { BatchFileGrant, TransferGrant, UploadBatchGrant } from './transfer-links';
 
 // One object owns the metadata and live connections for one private shelf.
 // The Workers stream file bodies directly to and from R2.
@@ -56,16 +56,34 @@ export class Shelf extends DurableObject<Env> {
   getFile(id: string): SharedFile { return present(this.#file(id), this.env); }
 
   issueTransfer(id: string, grant: TransferGrant, expiresAt: number): void {
-    const sql = this.ctx.storage.sql;
-    sql.exec('DELETE FROM transfer_grants WHERE expires_at <= ?', Date.now());
-    sql.exec('INSERT INTO transfer_grants (id, method, grant_json, expires_at) VALUES (?, ?, ?, ?)',
-      id, grant.method, JSON.stringify(grant), expiresAt);
+    if (grant.method === 'POST') this.uploads.assertOwner(grant.uploadId, grant.user.id);
+    this.ctx.storage.sql.exec('DELETE FROM transfer_grants WHERE expires_at <= ?', Date.now());
+    this.#insertTransfer(id, grant, expiresAt);
   }
 
   consumeTransfer(id: string, method: TransferGrant['method']): TransferGrant | null {
     const row = this.ctx.storage.sql.exec<{ grant_json: string }>(`DELETE FROM transfer_grants
       WHERE id = ? AND method = ? AND expires_at > ? RETURNING grant_json`, id, method, Date.now()).toArray()[0];
     return row ? JSON.parse(row.grant_json) as TransferGrant : null;
+  }
+
+  getUploadBatch(id: string): UploadBatchGrant | null {
+    const row = this.ctx.storage.sql.exec<{ grant_json: string }>(`SELECT grant_json FROM transfer_grants
+      WHERE id = ? AND method = 'POST' AND expires_at > ?`, id, Date.now()).toArray()[0];
+    return row ? JSON.parse(row.grant_json) as UploadBatchGrant : null;
+  }
+
+  exchangeUploadBatch(id: string, files: BatchFileGrant[], expiresAt: number): boolean {
+    return this.ctx.storage.transactionSync(() => {
+      const grant = this.consumeTransfer(id, 'POST');
+      if (grant?.method !== 'POST') return false;
+      for (const { id: fileId, path, contentType, sizeBytes } of files) {
+        this.#insertTransfer(fileId, {
+          method: 'PUT', uploadId: grant.uploadId, user: grant.user, path, contentType, sizeBytes,
+        }, expiresAt);
+      }
+      return true;
+    });
   }
 
   checkUploads(paths: string[]) { return this.uploads.check(paths); }
@@ -175,6 +193,11 @@ export class Shelf extends DurableObject<Env> {
   webSocketMessage(socket: WebSocket): void { socket.close(1008, 'This connection is read only.'); }
   webSocketClose(socket: WebSocket): void { this.#close(socket); }
   webSocketError(socket: WebSocket): void { this.#close(socket); }
+
+  #insertTransfer(id: string, grant: TransferGrant, expiresAt: number): void {
+    this.ctx.storage.sql.exec('INSERT INTO transfer_grants (id, method, grant_json, expires_at) VALUES (?, ?, ?, ?)',
+      id, grant.method, JSON.stringify(grant), expiresAt);
+  }
 
   #file(id: string): FileRow {
     const row = this.ctx.storage.sql.exec<FileRow>("SELECT * FROM files WHERE id = ? AND status IN ('ready', 'trashed', 'deleting')", id).toArray()[0];

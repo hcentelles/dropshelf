@@ -20,6 +20,8 @@ Use Access to change or revoke access. Do not rely on a policy edit to invalidat
 
 An Access-authenticated MCP call can issue a single-use link for one upload path or one file version. The Worker checks the signature, transfer origin, method, and ten-minute expiry. SQLite consumes the grant in one operation before bytes move. The uploader comes from the verified identity that requested the link. Treat the link as a credential until it is used or expires.
 
+A signed batch link lets a script submit a manifest for one folder. The transfer Worker checks every relative path, file type, and size. The Durable Object consumes the batch grant and registers the individual file grants in one transaction. Each resulting link applies to one path and size and permits one upload. The usual upload checks apply when the file bytes arrive.
+
 The transfer hostname accepts requests only on `/transfer/` with a valid link. Access protects the app, MCP, and normal content URLs. The transfer Worker's generated configuration omits automatic invocation logs that could store transfer URLs. Application logs omit the token.
 
 Any approved team member can set a file or folder to expire in 30 days or make it permanent. The server sets the time and applies folder actions in one SQLite transaction. Browser origin checks protect the write endpoint. Permanence prevents automatic expiry from Files; it does not prevent an approved member from moving the item to Trash or deleting it from Trash.

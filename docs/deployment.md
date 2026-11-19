@@ -78,7 +78,7 @@ mkdir -p "$HOME/.config/dropshelf/demo"
 cp instance.example.json "$HOME/.config/dropshelf/demo/instance.json"
 ```
 
-Edit that copied file. Set the account ID, bucket, exact app and content origins, Access team domain, and AUD tag. Change `appName` to set the name shown in the UI. Set `allowedFileTypes` to the allowed extensions and MIME types, such as `image/*,.html,.htm,.md,.markdown,.csv,.json,.pdf,.css,.js,.zip`. This becomes the `ALLOWED_FILE_TYPES` Worker variable. The two Worker names are `name` and `name-content`.
+Edit that copied file. Set the account ID, bucket, exact app and content origins, Access team domain, and AUD tag. Change `appName` to set the name shown in the UI. Set `allowedFileTypes` to the allowed extensions and MIME types, such as `image/*,.html,.htm,.md,.markdown,.csv,.json,.pdf,.css,.js,.zip,.txt,.xml`. This becomes the `ALLOWED_FILE_TYPES` Worker variable. The two Worker names are `name` and `name-content`.
 
 Set `fileRetentionDays` and `trashRetentionDays` for automatic expiry. The defaults are `30` and `7`. Use whole days from `1` to `36500`, or `0` to disable either step. These values become `FILE_RETENTION_DAYS` and `TRASH_RETENTION_DAYS`. A root file or top-level folder moves to Trash after the first period. Files are deleted after the second period starts at the move to Trash. See [automatic expiry](../README.md#automatic-expiry) for folder and restore rules.
 
@@ -156,7 +156,7 @@ The generated configuration keeps `workers.dev` enabled. The Worker rejects any 
 
 ## Updates and operations
 
-To enable JSON on an existing instance, add `.json` to `allowedFileTypes` in the private instance file. Generate both Worker configurations again and deploy them. A code update alone does not change an explicit `ALLOWED_FILE_TYPES` setting. Keep the existing size limits and Access settings.
+To enable JSON, plain text, or XML on an existing instance, add the corresponding extensions (`.json`, `.txt`, or `.xml`) to `allowedFileTypes` in the private instance file. Generate and deploy the app, content, and transfer configurations for that instance.
 
 Keep the same R2 bucket, app Worker name, Durable Object class (`Shelf`), and object name (`default`) when you deploy a new code version. The object name is fixed so a hostname change does not create an empty shelf. Schema changes belong in the versioned initialization in `worker/schema.ts`; they run in a synchronous SQLite transaction. Generate configuration again if you move the checkout, because its source paths are absolute.
 

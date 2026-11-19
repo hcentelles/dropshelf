@@ -42,7 +42,7 @@ it('keeps metadata, owner checks, Trash, and deletion records after the object r
   await expect(uploadFile(env, user, input(uploadId, deleted.path))).rejects.toMatchObject({ status: 409 });
   expect(await deleteFilePermanently(env, deleted.id, true)).toEqual({ id: deleted.id, deleted: true });
   expect(await database(sql => sql.exec('SELECT version FROM schema_migrations').toArray())).toEqual(
-    [1, 2, 3, 4, 5].map(version => ({ version })),
+    [1, 2, 3, 4, 5, 6].map(version => ({ version })),
   );
 });
 

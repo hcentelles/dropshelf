@@ -138,7 +138,7 @@ describe('private file service', () => {
   it('enforces the configured file types on the server even when a client spoofs the MIME type', async () => {
     const id = await createUpload(env, user);
     const imagesOnly = { ...env, ALLOWED_FILE_TYPES: 'image/*' };
-    for (const path of ['not-an-image.html', 'notes.md', 'scores.csv', 'data.json']) {
+    for (const path of ['not-an-image.html', 'notes.md', 'scores.csv', 'data.json', 'robots.txt', 'sitemap.xml']) {
       await expect(uploadFile(imagesOnly, user, {
         uploadId: id, path, type: 'image/png', size: 0, body: new Uint8Array(), source: 'web',
       })).rejects.toMatchObject({ status: 415 });
@@ -159,7 +159,7 @@ describe('private file service', () => {
 
   it('rejects unsupported files and traversal paths', async () => {
     const id = await group();
-    expect((await put(id, 'notes.txt', 'not supported', 'text/plain')).status).toBe(415);
+    expect((await put(id, 'notes.bin', 'not supported', 'application/octet-stream')).status).toBe(415);
     for (const path of ['../secret.html', '/root.html', 'folder//page.html', 'folder\\page.html']) {
       expect((await put(id, path)).status).toBe(400);
     }

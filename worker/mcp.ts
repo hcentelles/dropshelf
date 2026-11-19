@@ -2,14 +2,14 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { createMcpHandler } from 'agents/mcp/server';
 import { z } from 'zod';
 import { describeAllowedTypes } from '../shared/formats';
-import { MAX_BULK_FILES, type Principal } from '../shared/types';
-import { checkUploads, createUpload, getFile, listFiles, uploadFile } from './files';
-import { allowedFileTypes, HttpError, isHttpError, maxFileBytes } from './http';
+import { isFolder, MAX_BULK_FILES, type Principal } from '../shared/types';
+import { checkUploads, createUpload, getFile, listExplorer, listFiles, uploadFile } from './files';
+import { allowedFileTypes, cleanFolder, HttpError, isHttpError, maxFileBytes } from './http';
 import { deleteFilePermanently, restoreFile, trashFile } from './trash';
 import { getFileFilters } from './files';
 import { manageFiles } from './bulk';
 import { uploadFileReference } from './file-transfer';
-import { prepareDownloadLink, prepareUploadLink } from './transfer-links';
+import { prepareDownloadLink, prepareUploadBatch, prepareUploadLink } from './transfer-links';
 import { feedbackSchema, submitFeedback } from './feedback';
 
 export const MAX_MCP_BODY = 8 * 1024 * 1024;
@@ -22,7 +22,7 @@ const uploadDestination = {
 export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, user: Principal): Promise<Response> {
   function serverFactory(): McpServer {
     const server = new McpServer({ name: 'dropshelf', version: '0.1.0' }, {
-      instructions: 'For transfer-only requests, keep file bytes out of the model. For a local file, call create_upload with its destination path and follow the returned HTTP instructions. For a client-provided file reference, use upload_file_reference. Use get_download_link to save an attachment without opening it. Single-use links authorize their own requests. Keep these links private and request a new link if one expires or a transfer stops. Use upload_file only for content the user intends to send inline. Use submit_feedback to report a Drop Shelf issue or suggest an improvement to the team. Keep file contents, private links, personal data, and credentials out of reports.',
+      instructions: 'For transfer-only requests, keep file bytes out of the model. Call create_upload with path for one local file or folder for a signed batch. Follow the returned HTTP instructions in a local script. Use list_folder to browse a folder. For a client-provided file reference, use upload_file_reference. Use get_download_link to save an attachment without opening it. Single-use links authorize their own requests. Keep these links private and request a new link if one expires or a transfer stops. Use upload_file only for content the user intends to send inline. Use submit_feedback to report a Drop Shelf issue or suggest an improvement to the team. Keep file contents, private links, personal data, and credentials out of reports.',
     });
     const result = async (action: () => Promise<unknown>) => {
       try {
@@ -48,6 +48,31 @@ export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, use
       inputSchema: { cursor: z.string().max(4096).optional(), limit: z.number().int().min(1).max(100).optional(), view: z.enum(['files', 'trash']).default('files'), q: z.string().max(200).optional(), type: z.string().max(100).optional(), author: z.string().max(256).optional(), sort: z.enum(['newest', 'oldest', 'name']).default('newest') },
       annotations: { readOnlyHint: true },
     }, ({ cursor, limit, view, q, type, author, sort }) => result(() => listFiles(env, cursor ?? null, limit, view, { q, type, author, sort })));
+    server.registerTool('list_folder', {
+      title: 'List files and subfolders',
+      description: 'List the direct children of a folder in the shared shelf. Pass a relative folder path or omit it for the root. Set recursive to true to list every file below it. File entries include IDs and Access-protected links. Use get_download_link for a signed download. Keep the same folder, recursive setting, and sort when you pass nextCursor as cursor.',
+      inputSchema: {
+        folder: z.string().min(1).max(1025).optional(),
+        recursive: z.boolean().default(false),
+        sort: z.enum(['name', 'newest', 'oldest']).default('name'),
+        cursor: z.string().max(4096).optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+      },
+      annotations: { readOnlyHint: true },
+    }, ({ folder, recursive, sort, cursor, limit }) => result(async () => {
+      const query = { folder: folder === undefined ? undefined : cleanFolder(folder), sort };
+      const page = recursive
+        ? await listFiles(env, cursor ?? null, limit, 'files', query)
+        : await listExplorer(env, cursor ?? null, limit, 'files', query);
+      return {
+        total: page.total, nextCursor: page.nextCursor,
+        entries: ('entries' in page ? page.entries : page.files).map(entry => {
+          const { id, name, path, downloadUrl } = entry;
+          if (isFolder(entry)) return { kind: 'folder', id, name, path, downloadUrl, fileCount: entry.fileCount };
+          return { kind: 'file', id, name, path, downloadUrl, url: entry.url, contentType: entry.contentType, size: entry.size };
+        }),
+      };
+    }));
     server.registerTool('get_file_filters', {
       description: 'List file types and uploader IDs for filtering all files in a view, including older pages.',
       inputSchema: { view: z.enum(['files', 'trash']).default('files') }, annotations: { readOnlyHint: true },
@@ -90,14 +115,21 @@ export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, use
       }, ({ ids, confirm }) => result(() => manageFiles(env, user, action, ids, confirm === true)));
     }
     server.registerTool('create_upload', {
-      description: 'Pass a destination path to get a single-use uploadUrl for that file. The link authorizes one PUT for ten minutes. Follow usage and send the original bytes with an HTTP client. Check existing paths first and supply replace for a confirmed replacement. Reuse an uploadId to group files. Call without a path to start a batch or get browserUploadUrl for interactive upload. The batch uploadUrl requires Cloudflare Access.',
+      description: 'Pass path for one single-use file PUT link, or folder for one single-use batch POST link. Follow usage in a local script. For a batch, POST a list of files and use the returned PUT links in the script. Signed links authorize their own HTTP requests and expire after ten minutes. Check existing paths first and use replace with path for a confirmed replacement. Reuse an uploadId to group files. Call without arguments for an interactive upload or an Access-protected batch.',
       inputSchema: {
-        path: z.string().min(1).max(1024).optional(), contentType: z.string().max(100).optional(),
+        path: z.string().min(1).max(1024).optional(), folder: z.string().min(1).max(1025).optional(),
+        contentType: z.string().max(100).optional(),
         sizeBytes: z.number().int().nonnegative().optional(), ...uploadDestination,
       },
-    }, ({ path, contentType, sizeBytes, uploadId, replace }) => result(async () => {
+    }, ({ path, folder, contentType, sizeBytes, uploadId, replace }) => result(async () => {
       const origin = new URL(env.APP_ORIGIN).origin;
       const settings = { browserUploadUrl: `${origin}/#drop-zone`, maxFileBytes: maxFileBytes(env), maxMcpFileBytes: MAX_MCP_FILE };
+      if (folder !== undefined) {
+        if (path !== undefined || contentType !== undefined || sizeBytes !== undefined || replace !== undefined) {
+          throw new HttpError(400, 'Use folder and an optional uploadId for a signed batch. Send the file paths, sizes, and types in the HTTP request.');
+        }
+        return { ...settings, ...await prepareUploadBatch(env, user, folder, uploadId) };
+      }
       if (path !== undefined) return { ...settings, ...await prepareUploadLink(env, user, { path, contentType, sizeBytes, uploadId, replace }) };
       if (contentType !== undefined || sizeBytes !== undefined || uploadId !== undefined || replace !== undefined) {
         throw new HttpError(400, 'Supply a destination path to request a single-use upload link.');

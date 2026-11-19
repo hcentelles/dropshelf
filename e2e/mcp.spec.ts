@@ -2,12 +2,19 @@ import type { BulkResult, FileFilterOptions, FilePage, Principal, SharedFile, Up
 import { test, expect, fixtureBytes } from './fixtures';
 import { zipFixture } from './archive';
 
+interface FolderPage {
+  entries: ({ kind: 'folder'; path: string; fileCount: number }
+    | ({ kind: 'file' } & Pick<SharedFile, 'id' | 'path' | 'url' | 'downloadUrl'>))[];
+  total: number;
+  nextCursor: string | null;
+}
+
 test('connects with the MCP SDK, discovers tools, and returns the server identity', async ({ mcp }) => {
   expect(mcp.client.getServerVersion()?.name).toBe('dropshelf');
   const { tools } = await mcp.client.listTools();
   expect(tools.map(tool => tool.name).sort()).toEqual([
     'check_uploads', 'create_upload', 'delete_file_permanently', 'delete_files_permanently', 'get_download_link',
-    'get_file', 'get_file_filters', 'list_files', 'restore_file', 'restore_files', 'submit_feedback', 'trash_file', 'trash_files',
+    'get_file', 'get_file_filters', 'list_files', 'list_folder', 'restore_file', 'restore_files', 'submit_feedback', 'trash_file', 'trash_files',
     'upload_file', 'upload_file_reference', 'whoami',
   ]);
   for (const name of ['trash_file', 'delete_file_permanently', 'upload_file']) {
@@ -19,6 +26,34 @@ test('connects with the MCP SDK, discovers tools, and returns the server identit
   expect(await mcp.call<Principal>('whoami')).toEqual({
     id: 'local-developer', email: 'e2e@example.test', label: 'e2e@example.test', kind: 'user',
   });
+});
+
+test('lists and paginates direct subfolders and recursive files through MCP', async ({ mcp }) => {
+  for (const path of ['audit/project/2026-11-18T1800Z/view.html', 'audit/project/2026-11-17T1800Z/snapshot/data.json',
+    'audit/project/2026-11-17T1800Z/report.json', 'audit/project-other/2026-11-16T1800Z/data.json']) {
+    await mcp.call('upload_file', { path, content: '{}' });
+  }
+  const query = { folder: 'audit/project/', sort: 'name', limit: 1 };
+  const first = await mcp.call<FolderPage>('list_folder', query);
+  expect(first.entries).toMatchObject([{ kind: 'folder', path: 'audit/project/2026-11-17T1800Z', fileCount: 2 }]);
+  expect(first.total).toBe(2);
+  expect(first.nextCursor).toBeTruthy();
+  const next = await mcp.call<FolderPage>('list_folder', { ...query, cursor: first.nextCursor });
+  expect(next.entries).toMatchObject([{ kind: 'folder', path: 'audit/project/2026-11-18T1800Z', fileCount: 1 }]);
+  expect(next.nextCursor).toBeNull();
+  const folder = 'audit/project/2026-11-17T1800Z';
+  const direct = await mcp.call<FolderPage>('list_folder', { folder });
+  expect(direct.entries).toMatchObject([
+    { kind: 'folder', path: folder + '/snapshot' },
+    { kind: 'file', path: folder + '/report.json', id: expect.any(String), url: expect.stringContaining('/f/') },
+  ]);
+  const files = await mcp.call<FolderPage>('list_folder', { folder, recursive: true });
+  expect(files.entries).toMatchObject([
+    { kind: 'file', path: folder + '/snapshot/data.json' },
+    { kind: 'file', path: folder + '/report.json' },
+  ]);
+  const changed = await mcp.client.callTool({ name: 'list_folder', arguments: { ...query, recursive: true, cursor: first.nextCursor } });
+  expect(changed.isError).toBe(true);
 });
 
 test('validates feedback and reports when the instance has no Slack credentials', async ({ mcp }) => {
@@ -205,4 +240,59 @@ test('transfers the original bytes with single-use HTTP links and no cookies', a
   const used = await fetch(downloaded.downloadUrl, noCookies);
   expect(used.status).toBe(403);
   await used.body?.cancel();
+});
+
+test('uploads a 160-file run with one MCP batch link and keeps the original text and XML bytes', async ({ app, mcp }) => {
+  const folder = 'batch-audit/run';
+  const samples = [
+    { path: 'robots.txt', contentType: 'text/plain', bytes: Buffer.from('User-agent: *\r\n') },
+    { path: 'snapshot/sitemap.xml', contentType: 'text/xml', bytes: Buffer.from('<?xml version="1.0"?><urlset/>\r\n') },
+    ...Array.from({ length: 158 }, (_, index) => ({
+      path: `snapshot/record-${index}.json`, contentType: 'application/json', bytes: Buffer.from(JSON.stringify({ index })),
+    })),
+  ];
+  const batch = await mcp.call<{ folder: string; uploadId: string; uploadUrl: string; method: string; headers: Record<string, string> }>(
+    'create_upload', { folder });
+  expect(batch.folder).toBe(folder);
+  expect(new URL(batch.uploadUrl).origin).toBe(app.contentOrigin);
+  expect(batch.method).toBe('POST');
+  const direct = { credentials: 'omit', redirect: 'error' } as const;
+  const manifest = { ...direct, method: batch.method, headers: batch.headers,
+    body: JSON.stringify({ files: samples.map(({ path, contentType, bytes }) => ({ path, contentType, sizeBytes: bytes.length })) }) };
+  const response = await fetch(batch.uploadUrl, manifest);
+  expect(response.status).toBe(200);
+  const issued = await response.json() as {
+    uploadId: string; method: string; files: { path: string; uploadUrl: string; headers: Record<string, string> }[];
+  };
+  expect(issued.uploadId).toBe(batch.uploadId);
+  expect(issued.method).toBe('PUT');
+  expect(issued.files.map(file => file.path)).toEqual(samples.map(file => file.path));
+  const put = (index: number) => fetch(issued.files[index]!.uploadUrl, {
+    ...direct, method: issued.method, headers: issued.files[index]!.headers, body: samples[index]!.bytes,
+  });
+  const uploaded: SharedFile[] = [];
+  for (let start = 0; start < samples.length; start += 8) {
+    const responses = await Promise.all(issued.files.slice(start, start + 8).map((_, offset) => put(start + offset)));
+    for (const item of responses) {
+      expect(item.status).toBe(201);
+      uploaded.push(await item.json() as SharedFile);
+    }
+  }
+  expect(uploaded.every(file => file.uploadId === batch.uploadId && file.path.startsWith(folder + '/'))).toBe(true);
+  for (const [index, type] of ['text/plain', 'application/xml'].entries()) {
+    const { downloadUrl } = await mcp.call<{ downloadUrl: string }>('get_download_link', { id: uploaded[index]!.id });
+    const attachment = await fetch(downloadUrl, direct);
+    expect(attachment.status).toBe(200);
+    expect(attachment.headers.get('Content-Type')).toBe(type);
+    expect(Buffer.from(await attachment.arrayBuffer())).toEqual(samples[index]!.bytes);
+  }
+  const first = await mcp.call<FolderPage>('list_folder', { folder, recursive: true, limit: 100 });
+  expect(first.total).toBe(160);
+  const second = await mcp.call<FolderPage>('list_folder', { folder, recursive: true, limit: 100, cursor: first.nextCursor });
+  expect(new Set([...first.entries, ...second.entries].map(entry => entry.path)).size).toBe(160);
+  expect(second.nextCursor).toBeNull();
+  for (const replay of [await fetch(batch.uploadUrl, manifest), await put(0)]) {
+    expect(replay.status).toBe(403);
+    await replay.body?.cancel();
+  }
 });

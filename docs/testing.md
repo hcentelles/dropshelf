@@ -73,7 +73,7 @@ All tests import `test` and `expect` from `e2e/fixtures.ts`.
 | `page` | Chromium page with script-error checks and local request limits |
 | `mcp` | Connected MCP client SDK with JSON result helpers |
 
-`seed` is optional. Tests that do not request it start with no files. The seed adds `alpha.md`, `zulu.csv`, a `site` folder, and `discarded.md` in Trash. The site contains HTML, external CSS and JavaScript, an SVG image, and nested Markdown. `unsupported.txt` is present on disk for the folder-picker test but is excluded from the seed.
+`seed` is optional. Tests that do not request it start with no files. The seed adds `alpha.md`, `zulu.csv`, a `site` folder, and `discarded.md` in Trash. The site contains HTML, external CSS and JavaScript, an SVG image, and nested Markdown. The folder-picker test uses `unsupported.bin` as its excluded file.
 
 Fixture files are in `e2e/fixtures/`. Upload IDs, file IDs, and dates come from the running server. Tests use the returned records instead of fixed database IDs. ZIP fixtures are generated locally with a fixed file date. No production data or test-only reset API is required.
 

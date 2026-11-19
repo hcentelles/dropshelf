@@ -65,6 +65,10 @@ export function cleanPath(input: string): string {
   return path;
 }
 
+export function cleanFolder(input: string): string {
+  return cleanPath(input.endsWith('/') ? input.slice(0, -1) : input);
+}
+
 export async function readBody(request: Request, limit: number): Promise<Uint8Array> {
   const declared = request.headers.get('Content-Length');
   if (declared && (!/^\d+$/.test(declared) || Number(declared) > limit)) {

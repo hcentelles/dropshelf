@@ -6,12 +6,13 @@ import { readFile } from 'node:fs/promises';
 
 const endpoint = process.argv[2];
 if (!endpoint || !endpoint.startsWith('https://')) {
-  console.error('Usage: node scripts/check-mcp.mjs https://YOUR_APP_HOST/mcp [--write] [--transfer] [--feedback]');
+  console.error('Usage: node scripts/check-mcp.mjs https://YOUR_APP_HOST/mcp [--write] [--transfer] [--batch] [--feedback]');
   process.exit(1);
 }
 const target = new URL(endpoint);
 const write = process.argv.includes('--write');
 const transfer = process.argv.includes('--transfer');
+const batch = process.argv.includes('--batch');
 const feedback = process.argv.includes('--feedback');
 const callback = 'http://127.0.0.1:8990/callback';
 const verifier = randomBytes(32).toString('base64url');
@@ -167,6 +168,72 @@ try {
     console.log(JSON.stringify({ path, size: record.size, sha256: downloadedHash,
       put: uploaded.status, get: downloaded.status, replayPut: replayedUpload.status, replayGet: replayedDownload.status,
       protectedDownload: browserDownload.status }));
+  }
+  if (batch) {
+    assert.ok(tools.tools.some(tool => tool.name === 'list_folder'), 'The server must expose list_folder.');
+    const config = await getJson(`${target.origin}/api/config`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const root = `batch-check-${randomBytes(8).toString('hex')}`;
+    const folder = `${root}/run`;
+    const samples = [
+      { path: 'robots.txt', bytes: Buffer.from('User-agent: *\r\n'), contentType: 'text/plain' },
+      { path: 'snapshot/sitemap.xml', bytes: Buffer.from('<?xml version="1.0"?><urlset/>\r\n'), contentType: 'application/xml' },
+      { path: 'report.json', bytes: Buffer.from(JSON.stringify({ nonce: randomBytes(24).toString('hex') })), contentType: 'application/json' },
+    ];
+    const files = samples.map(({ path, contentType, bytes }) => (
+      { path, contentType: path.endsWith('.xml') ? 'text/xml' : contentType, sizeBytes: bytes.length }
+    ));
+    for (let index = files.length; index < 160; index++) {
+      files.push({ path: `snapshot/check-${index}.json`, contentType: 'application/json', sizeBytes: 2 });
+    }
+    const link = await call('create_upload', { folder });
+    assert.equal(link.folder, folder);
+    assert.equal(link.method, 'POST');
+    assert.equal(new URL(link.uploadUrl).origin, config.transferOrigin);
+    const direct = { credentials: 'omit', redirect: 'manual' };
+    const post = { ...direct, method: link.method, headers: link.headers, body: JSON.stringify({ files }) };
+    const exchanged = await fetch(link.uploadUrl, post);
+    assert.equal(exchanged.status, 200, 'The signed batch URL must accept the manifest.');
+    const issued = await exchanged.json();
+    assert.equal(issued.uploadId, link.uploadId);
+    assert.equal(issued.method, 'PUT');
+    assert.deepEqual(issued.files.map(file => file.path), files.map(file => file.path));
+    const replay = await fetch(link.uploadUrl, post);
+    assert.equal(replay.status, 403, 'The batch URL must reject reuse.');
+    await replay.body?.cancel();
+
+    for (const [index, sample] of samples.entries()) {
+      const upload = issued.files[index];
+      assert.equal(new URL(upload.uploadUrl).origin, config.transferOrigin);
+      assert.equal(upload.headers['Content-Type'], sample.contentType);
+      const put = { ...direct, method: issued.method, headers: upload.headers, body: sample.bytes };
+      const uploaded = await fetch(upload.uploadUrl, put);
+      assert.equal(uploaded.status, 201, 'A signed file URL must accept the original bytes.');
+      const file = await uploaded.json();
+      assert.equal(file.uploadId, link.uploadId);
+      assert.equal(file.path, `${folder}/${sample.path}`);
+      const reused = await fetch(upload.uploadUrl, put);
+      assert.equal(reused.status, 403, 'A file upload URL must reject reuse.');
+      await reused.body?.cancel();
+      const download = await call('get_download_link', { id: file.id });
+      assert.equal(new URL(download.downloadUrl).origin, config.transferOrigin);
+      const attachment = await fetch(download.downloadUrl, direct);
+      assert.equal(attachment.status, 200);
+      assert.equal(attachment.headers.get('Content-Type'), sample.contentType);
+      const received = await attachment.arrayBuffer();
+      assert.equal(createHash('sha256').update(Buffer.from(received)).digest('hex'),
+        createHash('sha256').update(sample.bytes).digest('hex'), 'The downloaded bytes must match.');
+    }
+    const parent = await call('list_folder', { folder: root + '/', sort: 'name' });
+    assert.deepEqual(parent.entries.map(({ kind, path }) => ({ kind, path })), [{ kind: 'folder', path: folder }]);
+    const listing = await call('list_folder', { folder, recursive: true, limit: 2 });
+    assert.equal(listing.total, samples.length);
+    assert.ok(listing.nextCursor);
+    const last = await call('list_folder', { folder, recursive: true, limit: 2, cursor: listing.nextCursor });
+    assert.equal(last.nextCursor, null);
+    assert.deepEqual([...listing.entries, ...last.entries].map(file => file.path).sort(),
+      samples.map(file => `${folder}/${file.path}`).sort());
+    console.log('PASS: One signed batch URL issued 160 file links. Folder listing, TXT/XML/JSON byte checks, and replay checks passed.');
+    console.log(JSON.stringify({ folder, links: issued.files.length, verifiedFiles: samples.length }));
   }
   if (write) {
     const { uploadId } = await call('create_upload');

@@ -32,7 +32,7 @@ it('upgrades existing metadata, preserves duplicate contents and every old URL, 
     initializeSchema(state.storage);
     initializeSchema(state.storage);
     expect(sql.exec('SELECT version FROM schema_migrations ORDER BY version').toArray()).toEqual(
-      [1, 2, 3, 4, 5].map(version => ({ version })),
+      [1, 2, 3, 4, 5, 6].map(version => ({ version })),
     );
     expect(sql.exec('SELECT id FROM retention_settings').toArray()).toEqual([]);
     expect(sql.exec('SELECT restored_at FROM files WHERE restored_at IS NOT NULL').toArray()).toEqual([]);
@@ -48,4 +48,26 @@ it('upgrades existing metadata, preserves duplicate contents and every old URL, 
   expect((await stub.getFile(records[1]!.id)).path).toBe('site/index (copy 3).html');
   expect((await stub.getFile(trashedId)).trashedAt).toBe(2);
   expect((await stub.getFile(records[2]!.id)).path).toBe('file (copy 2).html');
+});
+
+it('preserves active single-file transfer grants when batch grants are enabled', async () => {
+  const stub = env.SHELF.getByName(`transfer-migration-${crypto.randomUUID()}`);
+  const id = crypto.randomUUID();
+  const grant = { method: 'GET', userId: 'reader', fileId: crypto.randomUUID(), version: 1 } as const;
+  await runInDurableObject(stub, (_instance, state) => {
+    const sql = state.storage.sql;
+    sql.exec(`
+      DELETE FROM schema_migrations WHERE version = 6;
+      DROP TABLE transfer_grants;
+      CREATE TABLE transfer_grants (
+        id TEXT PRIMARY KEY, method TEXT NOT NULL CHECK (method IN ('GET', 'PUT')),
+        grant_json TEXT NOT NULL, expires_at INTEGER NOT NULL
+      );
+      CREATE INDEX transfer_grants_expiry ON transfer_grants(expires_at);
+    `);
+    sql.exec('INSERT INTO transfer_grants VALUES (?, ?, ?, ?)', id, grant.method, JSON.stringify(grant), Date.now() + 60_000);
+    initializeSchema(state.storage);
+  });
+  expect(await stub.consumeTransfer(id, 'GET')).toEqual(grant);
+  expect(await stub.consumeTransfer(id, 'GET')).toBeNull();
 });

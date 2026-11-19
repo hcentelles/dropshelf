@@ -17,6 +17,12 @@ const RECEIPT_LIFETIME = 24 * 60 * 60_000;
 export class UploadStore {
   constructor(private storage: DurableObjectStorage, private env: Env) {}
 
+  assertOwner(uploadId: string, userId: string): void {
+    const upload = this.storage.sql.exec<{ owner_id: string }>('SELECT owner_id FROM uploads WHERE id = ?', uploadId).toArray()[0];
+    if (!upload) throw new HttpError(404, 'The upload was not found.');
+    if (upload.owner_id !== userId) throw new HttpError(403, 'This upload belongs to another user.');
+  }
+
   check(paths: string[]): UploadCheck[] {
     if (!Array.isArray(paths) || !paths.length || paths.length > 100 || paths.some(path => typeof path !== 'string')) {
       throw new HttpError(400, 'Send from 1 to 100 file paths.');
@@ -44,9 +50,7 @@ export class UploadStore {
     await this.schedule(now + WRITE_TIMEOUT);
     return this.storage.transactionSync(() => {
       const sql = this.storage.sql;
-      const upload = sql.exec<{ owner_id: string }>('SELECT owner_id FROM uploads WHERE id = ?', input.uploadId).toArray()[0];
-      if (!upload) throw new HttpError(404, 'The upload was not found.');
-      if (upload.owner_id !== user.id) throw new HttpError(403, 'This upload belongs to another user.');
+      this.assertOwner(input.uploadId, user.id);
       this.assertNoWrite(path);
       this.assertNoFolderConflict(path);
       const existing = this.current(path);

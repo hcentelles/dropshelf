@@ -27,7 +27,7 @@ export function fileType(path: string, declaredType = ''): string {
   return /^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/.test(mime) ? mime : 'application/octet-stream';
 }
 
-export const DEFAULT_ALLOWED_FILE_TYPES = 'image/*,.html,.htm,.md,.markdown,.csv,.json,.pdf,.css,.js,.zip';
+export const DEFAULT_ALLOWED_FILE_TYPES = 'image/*,.html,.htm,.md,.markdown,.csv,.json,.pdf,.css,.js,.zip,.txt,.xml';
 
 export function parseAllowedFileTypes(value: string): string[] {
   if (typeof value !== 'string' || value.length > 2048) throw new Error('The file type setting is not valid.');
@@ -50,6 +50,7 @@ export function describeAllowedTypes(allowed: string[]): string {
     'image/*': 'Images', '.html': 'HTML', '.htm': 'HTML', 'text/html': 'HTML',
     '.md': 'Markdown', '.markdown': 'Markdown', 'text/markdown': 'Markdown',
     '.csv': 'CSV', 'text/csv': 'CSV', '.json': 'JSON', 'application/json': 'JSON',
+    '.txt': 'Plain text', 'text/plain': 'Plain text', '.xml': 'XML', 'application/xml': 'XML', 'text/xml': 'XML',
     '.css': 'CSS', 'text/css': 'CSS', '.js': 'JavaScript', 'text/javascript': 'JavaScript',
     '.pdf': 'PDF', 'application/pdf': 'PDF', '.zip': 'ZIP', 'application/zip': 'ZIP',
   };
@@ -66,7 +67,7 @@ export function fileTypeLabel(type: string): string {
   const labels: Record<string, string> = {
     'image/*': 'Images', 'text/html': 'HTML', 'text/markdown': 'Markdown', 'text/csv': 'CSV',
     'application/pdf': 'PDF', 'text/plain': 'Text', 'application/json': 'JSON',
-    'text/css': 'CSS', 'text/javascript': 'JavaScript', 'application/zip': 'ZIP',
+    'text/css': 'CSS', 'text/javascript': 'JavaScript', 'application/zip': 'ZIP', 'application/xml': 'XML',
   };
   return labels[type] ?? type;
 }
