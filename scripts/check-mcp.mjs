@@ -6,12 +6,13 @@ import { readFile } from 'node:fs/promises';
 
 const endpoint = process.argv[2];
 if (!endpoint || !endpoint.startsWith('https://')) {
-  console.error('Usage: node scripts/check-mcp.mjs https://YOUR_APP_HOST/mcp [--write] [--transfer]');
+  console.error('Usage: node scripts/check-mcp.mjs https://YOUR_APP_HOST/mcp [--write] [--transfer] [--feedback]');
   process.exit(1);
 }
 const target = new URL(endpoint);
 const write = process.argv.includes('--write');
 const transfer = process.argv.includes('--transfer');
+const feedback = process.argv.includes('--feedback');
 const callback = 'http://127.0.0.1:8990/callback';
 const verifier = randomBytes(32).toString('base64url');
 const state = randomBytes(24).toString('base64url');
@@ -92,8 +93,9 @@ try {
   }
   async function call(name, args = {}) {
     const result = await client.callTool({ name, arguments: args });
-    assert.ok(!result.isError, `${name} must succeed.`);
     const text = result.content.find(item => item.type === 'text')?.text;
+    if (name === 'submit_feedback' && result.isError) throw new Error(`Slack feedback check failed: ${text}`);
+    assert.ok(!result.isError, `${name} must succeed.`);
     assert.ok(text, `${name} must return a JSON record.`);
     return JSON.parse(text);
   }
@@ -110,6 +112,17 @@ try {
   const search = await call('list_files', { q: 'no-such-deployment-check-file', type: 'application/pdf' });
   assert.equal(search.total, 0);
   console.log('PASS: MCP SDK connection, tool discovery, verified identity, file listing, search, and filters.');
+  if (feedback) {
+    assert.ok(tools.tools.some(tool => tool.name === 'submit_feedback'), 'The server must expose submit_feedback.');
+    const receipt = await call('submit_feedback', {
+      summary: 'Drop Shelf feedback delivery test',
+      details: 'This message checks that the authenticated MCP can send one report to the configured Slack channel.',
+      proposedFix: 'Use the Slack message timestamp to verify delivery and complete the check.',
+    });
+    assert.equal(receipt.submitted, true);
+    assert.match(receipt.messageTs, /^\d+\.\d+$/);
+    console.log(`PASS: Slack accepted the MCP feedback report. Message timestamp: ${receipt.messageTs}`);
+  }
   if (transfer) {
     const config = await getJson(`${target.origin}/api/config`, { headers: { Authorization: `Bearer ${accessToken}` } });
     const path = `transfer-check-${randomBytes(8).toString('hex')}.json`;

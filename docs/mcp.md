@@ -76,6 +76,14 @@ Use a new OAuth connection after saving the Access settings:
 
 Repeat this check in ChatGPT and Claude Chat. Keep the timestamps and results in private deployment records. Do not put tokens or private identities in the repository. This test does not check the full 14-day expiry. That limit is verified from the Access settings.
 
+## Send feedback to Slack
+
+Use `submit_feedback` to report a problem with a tool or suggest a change. Supply a short `summary`, `details` with the observed and expected results, and a `proposedFix`. Include `stepsToReproduce` if you can repeat the issue with sample data. Keep file contents, private links, personal data, and credentials out of the report.
+
+The tool sends one message to the Slack channel set for this instance. A successful call returns `submitted: true` and the Slack message timestamp (`messageTs`). If delivery is uncertain, check the channel before sending the same report again. See [Slack setup](deployment.md#enable-slack-feedback).
+
+If a Slack secret is missing or empty, the tool returns an MCP error with status `503` before it contacts Slack. The error names each affected secret and tells you where to set it. A value that contains only spaces or other whitespace counts as empty.
+
 ## Transfer files as-is
 
 Ask the agent to transfer the file as-is. The server instructions tell clients to use these tools for transfers without reading, modifying, or sending the file contents to the model:

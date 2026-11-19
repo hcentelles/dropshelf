@@ -112,6 +112,17 @@ Generate a separate 32-byte random key for each instance with `openssl rand -hex
 
 For an existing instance, deploy the transfer Worker before deploying the app that issues links. Check that `/transfer/invalid` returns `403` from the transfer Worker, then deploy the app with the same signing key. Run `node scripts/check-mcp.mjs https://YOUR_APP_HOST/mcp --transfer` to check both transfers and ensure regular content URLs still require Access. The generated configuration omits automatic request URL logs on the transfer Worker.
 
+### Enable Slack feedback
+
+Install a Slack bot with the `chat:write` scope in the instance's workspace. Invite the bot to the feedback channel and copy the channel ID. Set both values as secrets on the **app Worker**. Use the bot token and channel for this instance. Enter each value at the Wrangler prompt.
+
+```sh
+npx wrangler secret put SLACK_CHANNEL_ID --config "$HOME/.config/dropshelf/demo/app.jsonc" --profile shelf-demo
+npx wrangler secret put SLACK_BOT_TOKEN --config "$HOME/.config/dropshelf/demo/app.jsonc" --profile shelf-demo
+```
+
+To check delivery, run `node scripts/check-mcp.mjs https://YOUR_APP_HOST/mcp --feedback`. This sends one test report through the authenticated MCP. Match the returned timestamp to the message in the channel.
+
 ## 7. Verify
 
 Check the complete flow before you invite the team:

@@ -118,6 +118,7 @@ Available tools:
 | Tool | Purpose |
 | --- | --- |
 | `whoami` | Show the verified upload identity |
+| `submit_feedback` | Send a Drop Shelf issue and a proposed fix to the instance's Slack channel |
 | `list_files` | Search and filter files, and get the next page cursor |
 | `get_file_filters` | Get file types and authors for the selected view |
 | `get_file` | Get a file record and protected URLs |

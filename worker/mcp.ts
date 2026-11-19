@@ -10,6 +10,7 @@ import { getFileFilters } from './files';
 import { manageFiles } from './bulk';
 import { uploadFileReference } from './file-transfer';
 import { prepareDownloadLink, prepareUploadLink } from './transfer-links';
+import { feedbackSchema, submitFeedback } from './feedback';
 
 export const MAX_MCP_BODY = 8 * 1024 * 1024;
 const MAX_MCP_FILE = 5 * 1024 * 1024;
@@ -21,7 +22,7 @@ const uploadDestination = {
 export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, user: Principal): Promise<Response> {
   function serverFactory(): McpServer {
     const server = new McpServer({ name: 'dropshelf', version: '0.1.0' }, {
-      instructions: 'For transfer-only requests, keep file bytes out of the model. For a local file, call create_upload with its destination path and follow the returned HTTP instructions. For a client-provided file reference, use upload_file_reference. Use get_download_link to save an attachment without opening it. Single-use links authorize their own requests. Keep these links private and request a new link if one expires or a transfer stops. Use upload_file only for content the user intends to send inline.',
+      instructions: 'For transfer-only requests, keep file bytes out of the model. For a local file, call create_upload with its destination path and follow the returned HTTP instructions. For a client-provided file reference, use upload_file_reference. Use get_download_link to save an attachment without opening it. Single-use links authorize their own requests. Keep these links private and request a new link if one expires or a transfer stops. Use upload_file only for content the user intends to send inline. Use submit_feedback to report a Drop Shelf issue or suggest an improvement to the team. Keep file contents, private links, personal data, and credentials out of reports.',
     });
     const result = async (action: () => Promise<unknown>) => {
       try {
@@ -36,6 +37,12 @@ export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, use
       description: 'Return the verified identity used to label uploads.',
       annotations: { readOnlyHint: true },
     }, async () => ({ content: [{ type: 'text', text: JSON.stringify(user) }] }));
+    server.registerTool('submit_feedback', {
+      title: 'Send Drop Shelf feedback to Slack',
+      description: 'Send one issue or improvement and a proposed fix to this instance’s Slack feedback channel. Describe the affected tool with sample data. Omit file contents, private links, personal data, and credentials.',
+      inputSchema: feedbackSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    }, report => result(() => submitFeedback(env, report)));
     server.registerTool('list_files', {
       description: 'List team files or Trash. Sort by newest (default), oldest, or name (A–Z). Date sorting uses the last update time for files and Trash time for Trash. Search file names with q. Filter with a MIME type or image/* and an author ID from get_file_filters. Keep the same view, filters, and sort with nextCursor.',
       inputSchema: { cursor: z.string().max(4096).optional(), limit: z.number().int().min(1).max(100).optional(), view: z.enum(['files', 'trash']).default('files'), q: z.string().max(200).optional(), type: z.string().max(100).optional(), author: z.string().max(256).optional(), sort: z.enum(['newest', 'oldest', 'name']).default('newest') },

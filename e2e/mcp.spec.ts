@@ -7,15 +7,33 @@ test('connects with the MCP SDK, discovers tools, and returns the server identit
   const { tools } = await mcp.client.listTools();
   expect(tools.map(tool => tool.name).sort()).toEqual([
     'check_uploads', 'create_upload', 'delete_file_permanently', 'delete_files_permanently', 'get_download_link',
-    'get_file', 'get_file_filters', 'list_files', 'restore_file', 'restore_files', 'trash_file', 'trash_files',
+    'get_file', 'get_file_filters', 'list_files', 'restore_file', 'restore_files', 'submit_feedback', 'trash_file', 'trash_files',
     'upload_file', 'upload_file_reference', 'whoami',
   ]);
   for (const name of ['trash_file', 'delete_file_permanently', 'upload_file']) {
     expect(tools.find(tool => tool.name === name)?.annotations?.destructiveHint).toBe(true);
   }
+  expect(tools.find(tool => tool.name === 'submit_feedback')?.annotations).toMatchObject({
+    readOnlyHint: false, openWorldHint: true, idempotentHint: false,
+  });
   expect(await mcp.call<Principal>('whoami')).toEqual({
     id: 'local-developer', email: 'e2e@example.test', label: 'e2e@example.test', kind: 'user',
   });
+});
+
+test('validates feedback and reports when the instance has no Slack credentials', async ({ mcp }) => {
+  const report = { summary: 'Test report', details: 'The sample tool failed.', proposedFix: 'Update the tool.' };
+  const result = await mcp.client.callTool({ name: 'submit_feedback', arguments: report });
+  expect(result.isError).toBe(true);
+  expect(result.content).toEqual([{ type: 'text', text: JSON.stringify({
+    error: "Slack feedback is unavailable. SLACK_BOT_TOKEN is missing. SLACK_CHANNEL_ID is missing. Set a non-empty value for each listed secret on this instance's Cloudflare app Worker.",
+    status: 503,
+  }) }]);
+  for (const args of [{ ...report, proposedFix: ' ' }, { ...report, channel: 'C222' }]) {
+    const invalid = await mcp.client.callTool({ name: 'submit_feedback', arguments: args });
+    expect(invalid.isError).toBe(true);
+    expect(JSON.stringify(invalid.content)).not.toContain('Slack feedback is unavailable');
+  }
 });
 
 test('uploads a folder and binary ZIP, then serves the original bytes over HTTP', async ({ mcp, shelf, app }) => {
