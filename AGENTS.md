@@ -1,7 +1,7 @@
 # Project instructions
 
 - Read `.gitignore` before you inspect project files. Do not read ignored files.
-- After completing Drop Shelf changes and the required checks, commit and push them. The user has given standing authorization; do not ask for confirmation.
+- Commit or push only when the user asks for that action.
 - Use English for code, documentation, and user-facing text.
 - Keep company names, private domains, account IDs, email addresses, and deployment credentials out of this repository.
 - Keep instance configuration outside the repository. Use the setup script and the deployment guide.

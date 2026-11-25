@@ -200,6 +200,12 @@ Updates keep the current folder, search, sort order, loaded range, and available
 - Access Managed OAuth is a Cloudflare beta feature. Test the clients you plan to use.
 - Storage, requests, database use, and Access seats follow your Cloudflare plan. Free allowances are shared with other use in the account.
 
-## Repository status
+## Contributing
 
-This is an early project. Keep deployments private. A public release and license have not been selected.
+Open an issue for a bug or feature request. For a code change, open a pull request and describe how you tested it. Run `npm run check` before submitting. Use sample files and local test accounts in reports and tests. See the [testing guide](docs/testing.md) and [security reporting policy](SECURITY.md).
+
+## License
+
+Copyright 2026 the Drop Shelf contributors. The [Apache License, Version 2.0](LICENSE) covers the Drop Shelf code and documentation. It permits private and commercial deployments.
+
+Third-party components keep their own licenses. The browser build includes the license texts for Drop Shelf, the Inter font, the Phosphor icons, and the Vite browser code at `/assets/licenses.txt`. If you distribute a prebuilt Worker, include the licenses and required notices for the dependencies in that bundle.

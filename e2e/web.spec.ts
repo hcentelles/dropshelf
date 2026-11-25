@@ -201,6 +201,18 @@ test('shows expiry on demand and supports bulk Trash, restore, and confirmed del
   expect((await shelf.http.get(seed.zulu.url)).status()).toBe(404);
 });
 
+test('serves the project and dependency licenses from the account menu', async ({ page, app }) => {
+  await page.goto(app.appOrigin);
+  await page.locator('.account-menu > summary').click();
+  await page.getByRole('link', { name: 'Licenses', exact: true }).click();
+  await expect(page).toHaveURL(`${app.appOrigin}/assets/licenses.txt`);
+  const notices = page.locator('body');
+  await expect(notices).toContainText('Apache License');
+  await expect(notices).toContainText('SIL OPEN FONT LICENSE');
+  await expect(notices).toContainText('Phosphor Icons');
+  await expect(notices).toContainText('Vite module preload helper');
+});
+
 test('loads read-only configuration and local MCP setup from the running server', async ({ page, app }) => {
   await page.goto(app.appOrigin);
   for (let attempt = 0; attempt < 2; attempt++) {

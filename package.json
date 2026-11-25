@@ -1,6 +1,7 @@
 {
   "name": "dropshelf",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "description": "A private file shelf for teams, built on Cloudflare Workers, R2, Durable Objects, and Access.",
