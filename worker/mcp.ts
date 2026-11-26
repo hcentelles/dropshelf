@@ -3,10 +3,9 @@ import { createMcpHandler } from 'agents/mcp/server';
 import { z } from 'zod';
 import { describeAllowedTypes } from '../shared/formats';
 import { isFolder, MAX_BULK_FILES, type Principal } from '../shared/types';
-import { checkUploads, createUpload, getFile, listExplorer, listFiles, uploadFile } from './files';
+import { checkUploads, createUpload, getFile, getFileFilters, getFileWithRetention, listExplorer, listFilesWithRetention, setPermanent, uploadFile } from './files';
 import { allowedFileTypes, cleanFolder, HttpError, isHttpError, maxFileBytes } from './http';
 import { deleteFilePermanently, restoreFile, trashFile } from './trash';
-import { getFileFilters } from './files';
 import { manageFiles } from './bulk';
 import { uploadFileReference } from './file-transfer';
 import { prepareDownloadLink, prepareUploadBatch, prepareUploadLink } from './transfer-links';
@@ -44,13 +43,13 @@ export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, use
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     }, report => result(() => submitFeedback(env, report)));
     server.registerTool('list_files', {
-      description: 'List team files or Trash. Sort by newest (default), oldest, or name (A–Z). Date sorting uses the last update time for files and Trash time for Trash. Search file names with q. Filter with a MIME type or image/* and an author ID from get_file_filters. Keep the same view, filters, and sort with nextCursor.',
+      description: 'List team files or Trash, including permanent and expiresAt (Unix milliseconds or null). Sort by newest (default), oldest, or name (A–Z). Date sorting uses the last update time for files and Trash time for Trash. Search file names with q. Filter with a MIME type or image/* and an author ID from get_file_filters. Keep the same view, filters, and sort with nextCursor.',
       inputSchema: { cursor: z.string().max(4096).optional(), limit: z.number().int().min(1).max(100).optional(), view: z.enum(['files', 'trash']).default('files'), q: z.string().max(200).optional(), type: z.string().max(100).optional(), author: z.string().max(256).optional(), sort: z.enum(['newest', 'oldest', 'name']).default('newest') },
       annotations: { readOnlyHint: true },
-    }, ({ cursor, limit, view, q, type, author, sort }) => result(() => listFiles(env, cursor ?? null, limit, view, { q, type, author, sort })));
+    }, ({ cursor, limit, view, q, type, author, sort }) => result(() => listFilesWithRetention(env, cursor ?? null, limit, view, { q, type, author, sort })));
     server.registerTool('list_folder', {
       title: 'List files and subfolders',
-      description: 'List the direct children of a folder in the shared shelf. Pass a relative folder path or omit it for the root. Set recursive to true to list every file below it. File entries include IDs and Access-protected links. Use get_download_link for a signed download. Keep the same folder, recursive setting, and sort when you pass nextCursor as cursor.',
+      description: 'List direct children of a folder, or omit folder for the root. Set recursive to true to list all files below it. Each entry has permanent and expiresAt (Unix milliseconds or null). A folder reports the earliest deadline, how many files are permanent, and whether new files directly in it inherit permanence. Use get_download_link for a signed download. Keep folder, recursive, and sort with nextCursor.',
       inputSchema: {
         folder: z.string().min(1).max(1025).optional(),
         recursive: z.boolean().default(false),
@@ -62,14 +61,17 @@ export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, use
     }, ({ folder, recursive, sort, cursor, limit }) => result(async () => {
       const query = { folder: folder === undefined ? undefined : cleanFolder(folder), sort };
       const page = recursive
-        ? await listFiles(env, cursor ?? null, limit, 'files', query)
+        ? await listFilesWithRetention(env, cursor ?? null, limit, 'files', query)
         : await listExplorer(env, cursor ?? null, limit, 'files', query);
       return {
         total: page.total, nextCursor: page.nextCursor,
         entries: ('entries' in page ? page.entries : page.files).map(entry => {
-          const { id, name, path, downloadUrl } = entry;
-          if (isFolder(entry)) return { kind: 'folder', id, name, path, downloadUrl, fileCount: entry.fileCount };
-          return { kind: 'file', id, name, path, downloadUrl, url: entry.url, contentType: entry.contentType, size: entry.size };
+          const { id, name, path, downloadUrl, permanent } = entry;
+          const expiresAt = 'expiry' in entry ? entry.expiry?.firstAt ?? null : entry.expiresAt;
+          const common = { id, name, path, downloadUrl, permanent, expiresAt };
+          if (isFolder(entry)) return { kind: 'folder', ...common, fileCount: entry.fileCount,
+            permanentCount: entry.permanentCount, permanentForNewFiles: entry.permanentForNewFiles };
+          return { kind: 'file', ...common, url: entry.url, contentType: entry.contentType, size: entry.size };
         }),
       };
     }));
@@ -78,9 +80,18 @@ export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, use
       inputSchema: { view: z.enum(['files', 'trash']).default('files') }, annotations: { readOnlyHint: true },
     }, ({ view }) => result(() => getFileFilters(env, view)));
     server.registerTool('get_file', {
-      description: 'Get a file record, its Trash state, and protected URLs. Files in Trash do not serve content.',
+      description: 'Get file metadata, protected URLs, Trash state, permanent, and expiresAt. The timestamp is in Unix milliseconds or null if no deadline applies. In Trash it is the deadline for deletion.',
       inputSchema: { id: z.uuid() }, annotations: { readOnlyHint: true },
-    }, ({ id }) => result(() => getFile(env, id)));
+    }, ({ id }) => result(() => getFileWithRetention(env, id)));
+    server.registerTool('set_permanent', {
+      title: 'Set file or folder retention',
+      description: 'Choose one active file by id or one folder by relative path. Set permanent to true to keep it, or false to restart its 30-day expiry. A folder setting replaces all settings below it and applies to future uploads. Returns the updated record with permanent and expiresAt (Unix milliseconds or null).',
+      inputSchema: z.strictObject({ id: z.uuid().optional(), folder: z.string().min(1).max(1025).optional(), permanent: z.boolean() }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    }, ({ id, folder, permanent }) => result(async () => {
+      if ((id === undefined) === (folder === undefined)) throw new HttpError(400, 'Supply exactly one file ID or folder path.');
+      return setPermanent(env, id ?? `folder:${cleanFolder(folder!)}`, permanent);
+    }));
     server.registerTool('get_download_link', {
       title: 'Download an original file',
       description: 'Get an attachment link for a transfer-only download. When single-use transfers are enabled, downloadUrl authorizes one GET for ten minutes. Follow usage with an HTTP client to save the original bytes to a local file without opening it. Use the Access-protected browserDownloadUrl for an interactive download. Use list_files to find the file ID.',

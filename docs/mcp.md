@@ -151,6 +151,14 @@ Use `list_files` to get the newest files by default. Set `sort` to `newest`, `ol
 
 Use `list_folder` to browse by path. For example, `{"folder":"audit/project","sort":"name"}` lists its direct subfolders and files. Omit `folder` to start at the root. Set `recursive: true` to list files in the folder and all its subfolders. File entries include an ID, path, and Access-protected links. Keep the same `folder`, `recursive`, and `sort` values when you pass `nextCursor` as `cursor`.
 
+## Check or change expiry
+
+`get_file`, `list_files`, and `list_folder` return `permanent` and `expiresAt`. The timestamp is in Unix milliseconds. It is the date a file becomes eligible to move to Trash. In Trash, it is the date a file becomes eligible for deletion. A permanent file has `expiresAt: null`. If automatic expiry is disabled, a file can also have `permanent: false` and `expiresAt: null`.
+
+For a folder, `permanent` is true when all its current files are permanent. `permanentCount` and `fileCount` include all active descendants. `expiresAt` is the earliest deadline among them, or null if none has a deadline. Check `permanentForNewFiles` to see whether a new file directly in this folder will inherit a permanent setting. A subfolder can have its own setting.
+
+Call `set_permanent` with one file ID or one relative folder path. For example, `{"folder":"reports/published","permanent":true}` keeps existing and future files under that path. A folder change replaces any settings below it. To restart the 30-day period for one file, send `{"id":"FILE_UUID","permanent":false}`. The tool returns the updated record. Both actions use the same retention rules as the web app.
+
 ## Replace an existing file
 
 1. Call `check_uploads` with `paths`, an array of up to 100 full relative paths.

@@ -47,6 +47,7 @@ export type ExplorerEntry = ShelfEntry & {
   expiry: ExpiryWindow | null;
   permanent: boolean;
   permanentCount: number;
+  permanentForNewFiles?: boolean;
 };
 export interface ExplorerPage { entries: ExplorerEntry[]; nextCursor: string | null; total: number }
 export interface FileScope { uploadId?: string; folder?: string }

@@ -24,10 +24,11 @@ type EntryRow = FileRow & {
   entry_first_expiry: number | null;
   entry_last_expiry: number | null;
   entry_permanent_count: number;
+  new_files_permanent: number | null;
 };
 
 export function queryExplorer(sql: SqlStorage, env: Env, cursor: string | null, limit = 30,
-  view: FileView = 'files', input: FileQuery = {}): ExplorerPage {
+  view: FileView = 'files', input: FileQuery = {}, entryId?: string): ExplorerPage {
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new HttpError(400, 'Use a limit from 1 to 100.');
   const sort = input.sort ?? 'newest';
   if (!['newest', 'oldest', 'name'].includes(sort)) throw new HttpError(400, 'Use newest, oldest, or name for sorting.');
@@ -75,9 +76,9 @@ export function queryExplorer(sql: SqlStorage, env: Env, cursor: string | null, 
       ${view === 'files' ? 'SUM(permanent)' : '0'} AS entry_permanent_count,
       CASE WHEN COUNT(DISTINCT trashed_by_id) > 1 THEN 'Multiple users' ELSE MAX(trashed_by_label) END AS entry_actor,
       MAX(${view === 'trash' ? 'trashed_at' : 'COALESCE(NULLIF(updated_at, 0), created_at)'}) AS entry_date, MAX(matches) AS matches
-    FROM tagged GROUP BY entry_id
+    FROM tagged ${entryId ? 'WHERE entry_id = ?' : ''} GROUP BY entry_id
   )`;
-  const bindings = [prefix, ...params, prefix, prefix, ...matchParams];
+  const bindings = [prefix, ...params, prefix, prefix, ...matchParams, ...(entryId ? [entryId] : [])];
   let point: [number, number | string, string] | undefined;
   if (cursor) {
     try {
@@ -94,10 +95,15 @@ export function queryExplorer(sql: SqlStorage, env: Env, cursor: string | null, 
   const direction = sort === 'newest' ? 'DESC' : 'ASC';
   const comparison = sort === 'newest' ? '<' : '>';
   const position = point ? ` AND (folder_rank > ? OR (folder_rank = ? AND (${column}, entry_id) ${comparison} (?, ?)))` : '';
-  const rows = sql.exec<EntryRow>(`${cte} SELECT f.*, g.* FROM grouped g JOIN files f ON f.id = g.record_id
+  // A folder with individually permanent files can still give new files a deadline.
+  const folderRule = view === 'files' ? `CASE WHEN g.folder_rank = 0 THEN (
+    SELECT s.mode = 'permanent' FROM retention_settings s WHERE s.kind = 'folder'
+      AND (s.path = g.entry_path OR substr(g.entry_path, 1, length(s.path) + 1) = s.path || '/')
+    ORDER BY length(s.path) DESC LIMIT 1) END` : 'NULL';
+  const rows = sql.exec<EntryRow>(`${cte} SELECT f.*, g.*, ${folderRule} AS new_files_permanent FROM grouped g JOIN files f ON f.id = g.record_id
     WHERE g.matches = 1${position} ORDER BY folder_rank ASC, ${column} ${direction}, entry_id ${direction} LIMIT ?`,
     ...bindings, ...(point ? [point[0], ...point] : []), limit + 1).toArray();
-  const count = sql.exec<{ total: number }>(`${cte} SELECT COUNT(*) AS total FROM grouped WHERE matches = 1`, ...bindings).one();
+  const total = entryId ? rows.length : sql.exec<{ total: number }>(`${cte} SELECT COUNT(*) AS total FROM grouped WHERE matches = 1`, ...bindings).one().total;
   const page = rows.slice(0, limit);
   const last = page.at(-1);
   return {
@@ -111,10 +117,10 @@ export function queryExplorer(sql: SqlStorage, env: Env, cursor: string | null, 
       createdAt: row.entry_created, updatedAt: row.entry_updated, trashedAt: row.entry_trashed, trashedBy: row.entry_actor,
       deletionPending: !!row.entry_pending,
       downloadUrl: `${new URL(env.CONTENT_ORIGIN).origin}/folders.zip?path=${encodeURIComponent(row.entry_path)}`,
-      } satisfies SharedFolder), expiry,
+      } satisfies SharedFolder), expiry, ...(row.folder_rank === 0 && view === 'files' && { permanentForNewFiles: !!row.new_files_permanent }),
       permanent: row.entry_permanent_count === row.file_count, permanentCount: row.entry_permanent_count };
     }),
-    total: count?.total ?? 0,
+    total,
     nextCursor: rows.length > limit && last
       ? encode([view, key, last.folder_rank, sort === 'name' ? last.entry_name : last.entry_date, last.entry_id]) : null,
   };

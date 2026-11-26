@@ -122,7 +122,8 @@ Available tools:
 | `list_files` | Search and filter files, and get the next page cursor |
 | `list_folder` | List the files and subfolders at one path or all files below it |
 | `get_file_filters` | Get file types and authors for the selected view |
-| `get_file` | Get a file record and protected URLs |
+| `get_file` | Get file metadata, protected URLs, and the effective expiry date |
+| `set_permanent` | Keep a file or folder permanently, or reset its expiry to 30 days |
 | `get_download_link` | Get a single-use attachment link and file details |
 | `create_upload` | Get a single-use link for a file or a folder upload |
 | `check_uploads` | Check full paths and get current files before replacement approval |

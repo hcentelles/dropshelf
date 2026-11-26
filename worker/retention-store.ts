@@ -1,4 +1,5 @@
-import { DAY_MS, EXTENDED_RETENTION_DAYS } from '../shared/retention';
+import { DAY_MS, EXTENDED_RETENTION_DAYS, type RetentionPolicy } from '../shared/retention';
+import type { SharedFile } from '../shared/types';
 
 export const RETENTION_DELETE_BATCH = 100;
 export type PendingDeletion = { id: string; object_key: string };
@@ -36,6 +37,22 @@ export function activeRetentionCtes(days: number): string {
     FROM matched_files f JOIN root_dates r ON r.retention_root = f.retention_root
     LEFT JOIN setting_dates s ON s.id = f.retention_id
   )`;
+}
+
+export function filesWithRetention(sql: SqlStorage, policy: RetentionPolicy, files: SharedFile[]) {
+  const activeIds = files.filter(file => file.trashedAt === null).map(file => file.id);
+  const rows = activeIds.length ? sql.exec<{ id: string; permanent: number; expiry_at: number | null }>(
+    `WITH ${activeRetentionCtes(policy.fileDays)} SELECT id, permanent, expiry_at FROM retained_files
+      WHERE id IN (SELECT value FROM json_each(?))`, JSON.stringify(activeIds)).toArray() : [];
+  const active = new Map(rows.map(row => [row.id, row]));
+  return files.map(file => {
+    if (file.trashedAt !== null) {
+      const expiresAt = policy.trashDays ? file.trashedAt + policy.trashDays * DAY_MS : null;
+      return { ...file, permanent: false, expiresAt };
+    }
+    const row = active.get(file.id)!;
+    return { ...file, permanent: !!row.permanent, expiresAt: row.expiry_at };
+  });
 }
 
 export function moveExpiredToTrash(storage: DurableObjectStorage, days: number, now: number): number {

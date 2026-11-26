@@ -89,7 +89,7 @@ try {
   client = new Client({ name: 'dropshelf-deployment-check', version: '0.1.0' });
   await client.connect(transport);
   const tools = await client.listTools();
-  for (const name of ['upload_file', 'check_uploads', 'trash_file', 'restore_file', 'delete_file_permanently', 'get_file_filters', 'trash_files', 'restore_files', 'delete_files_permanently']) {
+  for (const name of ['upload_file', 'check_uploads', 'trash_file', 'restore_file', 'delete_file_permanently', 'get_file_filters', 'trash_files', 'restore_files', 'delete_files_permanently', 'set_permanent']) {
     assert.ok(tools.tools.some(tool => tool.name === name), `The server must expose ${name}.`);
   }
   async function call(name, args = {}) {
@@ -146,6 +146,8 @@ try {
 
     const record = await call('get_file', { id: file.id });
     assert.ok(record.path === path && record.size === bytes.length && record.source === 'mcp');
+    assert.equal(typeof record.permanent, 'boolean');
+    assert.ok(record.expiresAt === null || Number.isSafeInteger(record.expiresAt));
     assert.equal(record.uploaderEmail, identity.email);
     const download = await call('get_download_link', { id: file.id });
     const downloadUrl = new URL(download.downloadUrl);

@@ -3,7 +3,7 @@ import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { beforeEach, expect, it } from 'vitest';
 import { DAY_MS, type RetentionMode } from '../shared/retention';
 import { createUpload, getFile, listExplorer, uploadFile } from '../worker/files';
-import { moveExpiredToTrash } from '../worker/retention-store';
+import { filesWithRetention, moveExpiredToTrash } from '../worker/retention-store';
 import { setRetention } from '../worker/retention-settings';
 import { shelf } from '../worker/shelf-client';
 import { deleteFilePermanently, restoreFile, trashFile } from '../worker/trash';
@@ -26,6 +26,17 @@ const change = (id: string, mode: RetentionMode, now: number) => runInDurableObj
   (_instance, state) => setRetention(state.storage, id, mode, now));
 const expire = (now: number, days = 30) => runInDurableObject(shelf(env),
   (_instance, state) => moveExpiredToTrash(state.storage, days, now));
+
+it('distinguishes disabled expiry from permanent files in metadata', async () => {
+  const file = await add('metadata.md');
+  const policy = { fileDays: 0, trashDays: 0 };
+  const details = (item: typeof file) => database(sql => filesWithRetention(sql, policy, [item]));
+  expect(await details(file)).toEqual([{ ...file, permanent: false, expiresAt: null }]);
+  await change(file.id, 'permanent', Date.now());
+  expect(await details(file)).toEqual([{ ...file, permanent: true, expiresAt: null }]);
+  const trashed = await trashFile(env, user, file.id);
+  expect(await details(trashed)).toEqual([{ ...trashed, permanent: false, expiresAt: null }]);
+});
 
 it('sets 30 days from the action time, not the old deadline, without changing file metadata', async () => {
   const file = await add('extended.md');

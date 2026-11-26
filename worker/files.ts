@@ -8,11 +8,16 @@ import type { RetentionMode } from '../shared/retention';
 export async function createUpload(env: Env, user: Principal): Promise<string> { return shelf(env).createUpload(user); }
 export async function checkUploads(env: Env, paths: string[]): Promise<UploadCheck[]> { return shelf(env).checkUploads(paths); }
 export async function getFile(env: Env, id: string): Promise<SharedFile> { return shelf(env).getFile(id); }
+export async function getFileWithRetention(env: Env, id: string) { return shelf(env).getFileWithRetention(id); }
+export async function setPermanent(env: Env, id: string, permanent: boolean) { return shelf(env).setPermanent(id, permanent); }
 export async function setFileRetention(env: Env, id: string, mode: RetentionMode) {
   return shelf(env).setRetention(id, mode);
 }
 export async function listFiles(env: Env, cursor: string | null, limit = 30, view: FileView = 'files', input: FileQuery = {}): Promise<FilePage> {
   return shelf(env).listFiles(cursor, limit, view, input);
+}
+export async function listFilesWithRetention(env: Env, cursor: string | null, limit = 30, view: FileView = 'files', input: FileQuery = {}) {
+  return shelf(env).listFilesWithRetention(cursor, limit, view, input);
 }
 export async function listExplorer(env: Env, cursor: string | null, limit = 30, view: FileView = 'files', input: FileQuery = {}): Promise<ExplorerPage> {
   return shelf(env).listExplorer(cursor, limit, view, input);

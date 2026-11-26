@@ -1,6 +1,7 @@
 import type { BulkResult, FileFilterOptions, FilePage, Principal, SharedFile, UploadCheck } from '../shared/types';
 import { test, expect, fixtureBytes } from './fixtures';
 import { zipFixture } from './archive';
+import { DAY_MS } from '../shared/retention';
 
 interface FolderPage {
   entries: ({ kind: 'folder'; path: string; fileCount: number }
@@ -14,10 +15,10 @@ test('connects with the MCP SDK, discovers tools, and returns the server identit
   const { tools } = await mcp.client.listTools();
   expect(tools.map(tool => tool.name).sort()).toEqual([
     'check_uploads', 'create_upload', 'delete_file_permanently', 'delete_files_permanently', 'get_download_link',
-    'get_file', 'get_file_filters', 'list_files', 'list_folder', 'restore_file', 'restore_files', 'submit_feedback', 'trash_file', 'trash_files',
+    'get_file', 'get_file_filters', 'list_files', 'list_folder', 'restore_file', 'restore_files', 'set_permanent', 'submit_feedback', 'trash_file', 'trash_files',
     'upload_file', 'upload_file_reference', 'whoami',
   ]);
-  for (const name of ['trash_file', 'delete_file_permanently', 'upload_file']) {
+  for (const name of ['trash_file', 'delete_file_permanently', 'set_permanent', 'upload_file']) {
     expect(tools.find(tool => tool.name === name)?.annotations?.destructiveHint).toBe(true);
   }
   expect(tools.find(tool => tool.name === 'submit_feedback')?.annotations).toMatchObject({
@@ -71,6 +72,57 @@ test('validates feedback and reports when the instance has no Slack credentials'
   }
 });
 
+test('reads effective retention and changes it for a file or a folder', async ({ mcp, shelf }) => {
+  const folder = 'published/site';
+  const file = await shelf.upload(folder + '/index.md', Buffer.from('sample'));
+  const other = await shelf.upload('published/site-old/readme.md', Buffer.from('sibling'));
+  const list = () => mcp.call<FolderPage>('list_folder', { folder: 'published' });
+  const permanent = { permanent: true, expiresAt: null };
+  expect(await mcp.call('get_file', { id: file.id })).toMatchObject({ permanent: false, expiresAt: other.updatedAt + 30 * DAY_MS });
+  expect(await mcp.call('set_permanent', { id: file.id, permanent: true })).toEqual({ ...file, ...permanent });
+  expect((await list()).entries[0]).toMatchObject({ ...permanent, permanentCount: 1, permanentForNewFiles: false });
+  expect(await mcp.call('set_permanent', { folder: folder + '/', permanent: true })).toMatchObject({
+    kind: 'folder', path: folder, fileCount: 1, permanentForNewFiles: true, ...permanent,
+  });
+  const nested = await shelf.upload(folder + '/assets/new.md', Buffer.from('new upload'));
+  expect(await mcp.call('get_file', { id: nested.id })).toEqual({ ...nested, ...permanent });
+  const replacement = await mcp.call<{ uploadUrl: string; headers: Record<string, string> }>('create_upload', {
+    path: nested.path, replace: { id: nested.id, version: nested.version },
+  });
+  const put = await fetch(replacement.uploadUrl, { method: 'PUT', headers: replacement.headers, body: 'updated' });
+  expect(put.status).toBe(201);
+  expect(await put.json()).toMatchObject({ id: nested.id, version: nested.version + 1 });
+  expect(await mcp.call('get_file', { id: nested.id })).toMatchObject({ ...permanent, url: nested.url, version: nested.version + 1 });
+  const start = Date.now();
+  const reset = await mcp.call<SharedFile & { permanent: boolean; expiresAt: number }>('set_permanent', { id: file.id, permanent: false });
+  expect(reset).toMatchObject({ ...file, permanent: false });
+  expect(reset.expiresAt).toBeGreaterThanOrEqual(start + 30 * DAY_MS);
+  expect(reset.expiresAt).toBeLessThanOrEqual(Date.now() + 30 * DAY_MS);
+  const timed = { permanent: false, expiresAt: reset.expiresAt };
+  expect((await list()).entries).toMatchObject([
+    { path: folder, ...timed, permanentCount: 1, fileCount: 2, permanentForNewFiles: true },
+    { path: 'published/site-old', permanent: false, permanentForNewFiles: false },
+  ]);
+  expect((await mcp.call<FolderPage>('list_folder', { folder })).entries).toMatchObject([
+    { path: folder + '/assets', ...permanent, permanentForNewFiles: true }, { id: file.id, ...timed },
+  ]);
+  expect((await mcp.call<FolderPage>('list_folder', { folder, recursive: true })).entries).toMatchObject([
+    { id: file.id, ...timed }, { id: nested.id, ...permanent },
+  ]);
+  expect((await mcp.call<FilePage>('list_files', { q: 'index.md' })).files).toMatchObject([{ id: file.id, ...timed }]);
+  await mcp.call('set_permanent', { id: nested.id, permanent: true });
+  const folderReset = await mcp.call<{ expiresAt: number }>('set_permanent', { folder, permanent: false });
+  expect(folderReset).toMatchObject({ permanent: false, permanentCount: 0, permanentForNewFiles: false });
+  expect(await mcp.call('get_file', { id: nested.id })).toMatchObject({ permanent: false, expiresAt: folderReset.expiresAt });
+  const moved = await mcp.call<SharedFile>('trash_file', { id: nested.id });
+  expect(await mcp.call('get_file', { id: nested.id })).toMatchObject({ permanent: false, expiresAt: moved.trashedAt! + 7 * DAY_MS });
+  for (const args of [{}, { folder, id: file.id }, { folder: '/' }, { folder: 'missing' }, { id: nested.id }, { unexpected: folder }]) {
+    const response = await mcp.client.callTool({ name: 'set_permanent', arguments: { ...args, permanent: true } });
+    expect(response.isError, JSON.stringify(args)).toBe(true);
+  }
+  expect((await list()).entries[0]).toMatchObject({ path: folder, permanent: false, permanentForNewFiles: false });
+});
+
 test('uploads a folder and binary ZIP, then serves the original bytes over HTTP', async ({ mcp, shelf, app }) => {
   const { uploadId, uploadUrl } = await mcp.call<{ uploadId: string; uploadUrl: string }>('create_upload');
   expect(uploadUrl).toBe(`${app.appOrigin}/api/uploads/${uploadId}`);
@@ -111,7 +163,7 @@ test('uploads JSON through MCP and retrieves its metadata and original bytes', a
       ...(encoding === 'utf8' && { contentType: 'application/json' }),
     });
     expect(file).toMatchObject({ source: 'mcp', contentType: 'application/json', size: bytes.length });
-    expect(await mcp.call<SharedFile>('get_file', { id: file.id })).toEqual(file);
+    expect(await mcp.call('get_file', { id: file.id })).toEqual({ ...file, permanent: false, expiresAt: file.updatedAt + 30 * DAY_MS });
     for (const [url, disposition] of [[file.url, 'inline'], [file.downloadUrl, 'attachment']]) {
       const response = await shelf.http.get(url!);
       expect(response.status()).toBe(200);

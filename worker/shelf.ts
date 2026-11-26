@@ -7,7 +7,7 @@ import { cleanPath, HttpError } from './http';
 import { initializeSchema } from './schema';
 import { UploadStore } from './upload-store';
 import { retentionPolicy, type RetentionMode } from '../shared/retention';
-import { beginExpiredDeletion, moveExpiredToTrash } from './retention-store';
+import { beginExpiredDeletion, filesWithRetention, moveExpiredToTrash } from './retention-store';
 import { removeDeletedRetention, setRetention } from './retention-settings';
 import { folderArchiveFiles } from './archive-store';
 import type { BatchFileGrant, TransferGrant, UploadBatchGrant } from './transfer-links';
@@ -37,6 +37,11 @@ export class Shelf extends DurableObject<Env> {
     return queryFiles(this.ctx.storage.sql, this.env, cursor, limit, view, input);
   }
 
+  listFilesWithRetention(cursor: string | null, limit = 30, view: FileView = 'files', input: FileQuery = {}) {
+    const page = this.listFiles(cursor, limit, view, input);
+    return { ...page, files: filesWithRetention(this.ctx.storage.sql, retentionPolicy(this.env), page.files) };
+  }
+
   listExplorer(cursor: string | null, limit = 30, view: FileView = 'files', input: FileQuery = {}) {
     return queryExplorer(this.ctx.storage.sql, this.env, cursor, limit, view, input);
   }
@@ -54,6 +59,10 @@ export class Shelf extends DurableObject<Env> {
   }
 
   getFile(id: string): SharedFile { return present(this.#file(id), this.env); }
+
+  getFileWithRetention(id: string) {
+    return filesWithRetention(this.ctx.storage.sql, retentionPolicy(this.env), [this.getFile(id)])[0]!;
+  }
 
   issueTransfer(id: string, grant: TransferGrant, expiresAt: number): void {
     if (grant.method === 'POST') this.uploads.assertOwner(grant.uploadId, grant.user.id);
@@ -102,6 +111,15 @@ export class Shelf extends DurableObject<Env> {
     const result = setRetention(this.ctx.storage, id, mode, Date.now());
     this.#broadcast();
     return result;
+  }
+
+  setPermanent(id: string, permanent: boolean) {
+    const setting = this.setRetention(id, permanent ? 'permanent' : '30-days');
+    if (!setting.id.startsWith('folder:')) return this.getFileWithRetention(setting.id);
+    const path = setting.id.slice('folder:'.length);
+    const folder = path.split('/').slice(0, -1).join('/');
+    const entry = queryExplorer(this.ctx.storage.sql, this.env, null, 1, 'files', { folder }, setting.id).entries[0]!;
+    return { ...entry, expiresAt: entry.expiry?.firstAt ?? null };
   }
 
   expireFiles(): number {
